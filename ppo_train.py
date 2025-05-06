@@ -25,7 +25,7 @@ def main():
 
     # Entraînement
     print("Début de l'entraînement...")
-    model.learn(total_timesteps=100000)  # Ajustez ce paramètre pour un entraînement plus long
+    model.learn(total_timesteps=100000)
 
     # Sauvegarde du modèle
     print("Sauvegarde du modèle...")

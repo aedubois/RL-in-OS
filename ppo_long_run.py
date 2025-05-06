@@ -26,6 +26,7 @@ def main():
                 obs, _ = env.reset()
 
         # Boucle principale
+        print("Début de l'exécution prolongée...")
         obs, _ = env.reset()
         step = 0
 
