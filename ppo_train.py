@@ -3,34 +3,34 @@ from stable_baselines3.common.env_util import make_vec_env
 from linux_kernel_env import KernelTuneEnv
 
 def main():
-    # Créer un environnement vectorisé
-    print("Initialisation de l'environnement...")
+    # Create a vectorized environment
+    print("Initializing the environment...")
     env = make_vec_env(lambda: KernelTuneEnv(), n_envs=1)
 
-    # Créer le modèle PPO
-    print("Création du modèle PPO...")
+    # Create the PPO model
+    print("Creating the PPO model...")
     model = PPO(
-        "MlpPolicy",  # Politique basée sur un réseau de neurones multi-layer perceptron
+        "MlpPolicy",  # Policy based on a multi-layer perceptron neural network
         env,
-        verbose=2,  # Affiche des informations détaillées pendant l'entraînement
-        tensorboard_log="./logs/",  # Dossier pour les logs TensorBoard
-        n_steps=256,  # Nombre d'étapes avant une mise à jour du modèle
-        learning_rate=3e-4,  # Taux d'apprentissage
-        gamma=0.99,  # Facteur de discount
-        gae_lambda=0.95,  # Facteur pour l'estimation de l'avantage généralisé
-        ent_coef=0.02,  # Coefficient pour la régularisation d'entropie
-        vf_coef=0.5,  # Coefficient pour la perte de la fonction de valeur
-        max_grad_norm=0.5,  # Norme maximale pour le gradient
+        verbose=2,  # Display detailed information during training
+        tensorboard_log="./logs/",  # Folder for TensorBoard logs
+        n_steps=256,  # Number of steps before updating the model
+        learning_rate=3e-4,  # Learning rate
+        gamma=0.99,  # Discount factor
+        gae_lambda=0.95,  # Factor for generalized advantage estimation
+        ent_coef=0.02,  # Coefficient for entropy regularization
+        vf_coef=0.5,  # Coefficient for value function loss
+        max_grad_norm=0.5,  # Maximum gradient norm
     )
 
-    # Entraînement
-    print("Début de l'entraînement...")
+    # Training
+    print("Starting training...")
     model.learn(total_timesteps=100000)
 
-    # Sauvegarde du modèle
-    print("Sauvegarde du modèle...")
+    # Save the model
+    print("Saving the model...")
     model.save("ppo_kernel")
-    print("Modèle sauvegardé dans ppo_kernel.zip")
+    print("Model saved in ppo_kernel.zip")
 
 if __name__ == "__main__":
     main()

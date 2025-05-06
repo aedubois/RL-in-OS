@@ -5,42 +5,42 @@ from stable_baselines3 import PPO
 from linux_kernel_env import KernelTuneEnv
 
 def main():
-    # Charger le modèle
-    print("Chargement du modèle...")
+    # Load the model
+    print("Loading the model...")
     model = PPO.load("ppo_kernel")
 
-    # Créer l'environnement
-    print("Initialisation de l'environnement...")
+    # Create the environment
+    print("Initializing the environment...")
     env = KernelTuneEnv()
 
-    # Initialisation des logs
+    # Initialize logs
     logs = []
 
     try:
-        # Test initial du modèle
+        # Initial test of the model
         obs, _ = env.reset()
-        for _ in range(10):  # Test sur 10 étapes
+        for _ in range(10): 
             action, _ = model.predict(obs, deterministic=True)
             obs, reward, terminated, truncated, _ = env.step(action)
             if terminated or truncated:
                 obs, _ = env.reset()
 
-        # Boucle principale
-        print("Début de l'exécution prolongée...")
+        # Main loop
+        print("Starting long execution...")
         obs, _ = env.reset()
         step = 0
 
         while True:
-            # Action prise par le modèle
+            # Action taken by the model
             action, _ = model.predict(obs, deterministic=True)
 
-            # Étape de l'environnement
+            # Step in the environment
             obs, reward, terminated, truncated, _ = env.step(action)
 
-            # Sauvegarde des logs
+            # Save logs
             logs.append({
                 "Step": step,
-                "Action": int(action),  # Correction : action est un scalaire
+                "Action": int(action),
                 "CPU": float(obs[0]),
                 "Swap": float(obs[1]),
                 "Load": float(obs[2]),
@@ -50,7 +50,7 @@ def main():
                 "Reward": float(reward),
             })
 
-            # Réinitialisation si l'environnement est terminé
+            # Reset if the environment is done
             if terminated or truncated:
                 obs, _ = env.reset()
 
@@ -58,16 +58,16 @@ def main():
             time.sleep(1)
 
     except KeyboardInterrupt:
-        # Sauvegarde des résultats
+        # Save the results
         save_logs(logs)
 
 def save_logs(logs):
-    # Sauvegarde des logs dans un fichier CSV
+    # Save logs to a CSV file
     df = pd.DataFrame(logs)
     df.to_csv("ppo_long_run_log.csv", index=False)
-    print("\n Logs sauvegardés dans ppo_long_run_log.csv")
+    print("\n Logs saved to ppo_long_run_log.csv")
 
-    # Génération d'un graphique
+    # Generate a plot
     plt.figure(figsize=(14, 10))
 
     metrics = ["CPU", "Swap", "Load", "RAM", "IOwait", "Latency", "Reward"]
@@ -82,8 +82,7 @@ def save_logs(logs):
 
     plt.tight_layout()
     plt.savefig("ppo_long_run_plot.png")
-    print("Graphique sauvegardé dans ppo_long_run_plot.png")
+    print("Plot saved to ppo_long_run_plot.png")
 
 if __name__ == "__main__":
     main()
-
