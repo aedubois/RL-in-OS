@@ -7,15 +7,17 @@ import subprocess
 import multiprocessing
 import time
 
+
 class KernelTuneEnv(gym.Env):
     """
     Environment for tuning Linux kernel parameters and observing the effects on system metrics.
     """
     def __init__(self):
         super(KernelTuneEnv, self).__init__()
-        self.action_space = spaces.Discrete(6)  # 6 possible actions
+        self.action_space = spaces.Discrete(7)  # 7 possible actions (including corrective actions)
         self.observation_space = spaces.Box(low=0.0, high=1.0, shape=(6,), dtype=np.float32)
         self.state = None
+        self.previous_state = None
         self.step_count = 0
         self.max_steps = 1000
         self.processes = []  # To track processes created by actions
@@ -27,6 +29,7 @@ class KernelTuneEnv(gym.Env):
         super().reset(seed=seed)
         self.clean_resources()  # Clean up any leftover resources
         self.state = self._get_initial_state()
+        self.previous_state = self.state.copy()
         self.step_count = 0
         return self.state, {}
 
@@ -34,6 +37,7 @@ class KernelTuneEnv(gym.Env):
         """
         Applies an action and returns the next state, reward, and episode termination indicators.
         """
+        self.previous_state = self.state.copy()  # Save the previous state
         self._apply_action(action)
         self.state = self._get_next_state()
         reward = self._calculate_reward()
@@ -61,10 +65,11 @@ class KernelTuneEnv(gym.Env):
         elif action == 3:
             self._cpu_stress()
         elif action == 4:
-            #self._memory_stress()
-            pass # NOT IMPLEMENTED
+            self._memory_stress()
         elif action == 5:
             self._disk_io_stress()
+        elif action == 6:  # Corrective action to stop stress processes
+            self._stop_stress()
 
     def _get_next_state(self):
         """
@@ -76,12 +81,11 @@ class KernelTuneEnv(gym.Env):
         """
         Collects real system metrics using psutil.
         """
-        cpu_usage = psutil.cpu_percent(interval=0.1) / 100.0  # Normalize to [0, 1]
-        ram_usage = psutil.virtual_memory().percent / 100.0  # Normalize to [0, 1]
-        swap_usage = psutil.swap_memory().percent / 100.0  # Normalize to [0, 1]
-        io_counters = psutil.disk_io_counters()
-        iowait = io_counters.write_time / 1000.0 if io_counters else 0.0  # Approximation
-        load_avg = sum(psutil.getloadavg()) / (3 * psutil.cpu_count())  # Normalize to [0, 1]
+        cpu_usage = psutil.cpu_percent(interval=1.0) / 100.0  # Normalized to [0, 1]
+        ram_usage = psutil.virtual_memory().percent / 100.0  # Normalized to [0, 1]
+        swap_usage = psutil.swap_memory().percent / 100.0  # Normalized to [0, 1]
+        iowait = psutil.cpu_times().iowait / 100.0  # Normalized I/O wait time
+        load_avg = psutil.getloadavg()[0] / psutil.cpu_count()  # Load average per core
         latency = np.random.uniform(0.0, 1.0)  # Placeholder for network latency
 
         return np.array([cpu_usage, swap_usage, load_avg, ram_usage, iowait, latency], dtype=np.float32)
@@ -91,41 +95,21 @@ class KernelTuneEnv(gym.Env):
         Calculates the reward based on defined objectives with tolerance zones.
         """
         # Targets and tolerances
-        cpu_target = 0.6  # 60%
-        cpu_tolerance = 0.1  # ±10%
+        cpu_target = 0.4  
+        ram_target = 0.35
+        load_target = 0.2
 
-        iowait_target = 0.05  # 5%
-        iowait_tolerance = 0.02  # ±2%
+        # Penalties
+        cpu_penalty = max(0, abs(self.state[0] - cpu_target) - 0.1)
+        ram_penalty = max(0, abs(self.state[3] - ram_target) - 0.1)
+        load_penalty = max(0, abs(self.state[2] - load_target) - 0.1)
 
-        ram_target = 0.7  # 70%
-        ram_tolerance = 0.1  # ±10%
-
-        swap_target = 0.0  # Close to 0
-        swap_tolerance = 0.05  # ±5%
-
-        latency_target = 0.1  # 100ms
-        latency_tolerance = 0.05  # ±5%
-
-        load_target = 0.5  # Load relative to the number of cores (normalized)
-        load_tolerance = 0.1  # ±10%
-
-        # Penalties if metrics are outside the tolerance zones
-        cpu_penalty = max(0, abs(self.state[0] - cpu_target) - cpu_tolerance)
-        iowait_penalty = max(0, abs(self.state[4] - iowait_target) - iowait_tolerance)
-        ram_penalty = max(0, abs(self.state[3] - ram_target) - ram_tolerance)
-        swap_penalty = max(0, abs(self.state[1] - swap_target) - swap_tolerance)
-        latency_penalty = max(0, abs(self.state[5] - latency_target) - latency_tolerance)
-        load_penalty = max(0, abs(self.state[2] - load_target) - load_tolerance)
+        # Bonus for reducing CPU or RAM usage
+        cpu_bonus = max(0, self.previous_state[0] - self.state[0])  # Reduction in CPU usage
+        ram_bonus = max(0, self.previous_state[3] - self.state[3])  # Reduction in RAM usage
 
         # Reward calculation
-        reward = 1.0 - (
-            0.3 * cpu_penalty +
-            0.2 * iowait_penalty +
-            0.2 * ram_penalty +
-            0.1 * swap_penalty +
-            0.1 * latency_penalty +
-            0.1 * load_penalty
-        )
+        reward = 1.0 - (0.3 * cpu_penalty + 0.2 * ram_penalty + 0.1 * load_penalty) + 0.1 * (cpu_bonus + ram_bonus)
 
         # Ensure reward is within [0, 1]
         return max(reward, 0.0)
@@ -145,13 +129,16 @@ class KernelTuneEnv(gym.Env):
 
     def _play_video(self):
         """
-        Plays a video using VLC.
+        Simulates playing a video using VLC without opening a video window.
         """
-        print("Playing video...")
         try:
             video_path = os.path.join(os.getcwd(), "video", "video.mp4")
-            process = subprocess.Popen(["vlc", "--intf", "dummy", video_path, "--play-and-exit"])
-            self.processes.append(process)
+            process = subprocess.Popen(
+                ["vlc", "--intf", "dummy", "--play-and-exit", "--run-time=2", "--no-video", video_path],
+                stderr=subprocess.DEVNULL,
+                stdout=subprocess.DEVNULL
+            )
+            process.wait()  # Wait for VLC to finish
         except FileNotFoundError:
             print("Error: VLC or the video file is missing.")
 
@@ -162,7 +149,7 @@ class KernelTuneEnv(gym.Env):
         def stress():
             while True:
                 pass
-        for _ in range(multiprocessing.cpu_count()):
+        for _ in range(multiprocessing.cpu_count() // 2):  # Use only half the cores
             process = multiprocessing.Process(target=stress)
             process.start()
             self.processes.append(process)
@@ -171,7 +158,7 @@ class KernelTuneEnv(gym.Env):
         """
         Simulates memory stress by allocating large amounts of memory progressively.
         """
-        self.memory_stress = [" " * 10**6 for _ in range(10**5)]  # Allocate 100MB of memory
+        self.memory_stress = [" " * 10**6 for _ in range(10**4)]  # Allocate 10MB of memory
 
     def _disk_io_stress(self):
         """
@@ -181,6 +168,13 @@ class KernelTuneEnv(gym.Env):
             subprocess.run(["dd", "if=/dev/zero", "of=/tmp/largefile", "bs=1M", "count=1024"])
         process = subprocess.Popen(["cat", "/tmp/largefile"])
         self.processes.append(process)
+
+    def _stop_stress(self):
+        """
+        Stops all stress processes to reduce system load.
+        """
+        print("Stopping stress processes...")
+        self.clean_resources()
 
     def clean_resources(self):
         """
