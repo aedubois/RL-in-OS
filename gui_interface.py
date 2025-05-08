@@ -1,5 +1,5 @@
 import tkinter as tk
-from tkinter import messagebox
+from tkinter import ttk, messagebox
 import subprocess
 import os
 import multiprocessing
@@ -10,21 +10,37 @@ class KernelTuneGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Kernel Tune Interface")
+        self.root.geometry("400x700")
         self.processes = []
 
-        # Create buttons for each action
-        tk.Button(root, text="Simulate CPU Stress", command=self.simulate_cpu_stress).pack(pady=5)
-        tk.Button(root, text="Simulate Memory Stress", command=self.simulate_memory_stress).pack(pady=5)
-        tk.Button(root, text="Simulate Disk I/O Stress", command=self.simulate_disk_io_stress).pack(pady=5)
-        tk.Button(root, text="Open Video", command=self.open_video).pack(pady=5)
-        tk.Button(root, text="Ping Network", command=self.ping_network).pack(pady=5)
-        tk.Button(root, text="Clean Resources", command=self.clean_resources).pack(pady=5)
+        # Header
+        header = ttk.Label(root, text="Kernel Tune Interface", font=("Arial", 16, "bold"))
+        header.pack(pady=10)
 
-        # Add button to open the monitoring window
-        tk.Button(root, text="Open System Monitor", command=self.open_monitor).pack(pady=5)
+        # Add button to open the monitoring window (separated at the top)
+        ttk.Button(root, text="Open System Monitor", command=self.open_monitor).pack(pady=10)
+
+        # Create buttons for each action
+        actions_frame = ttk.LabelFrame(root, text="Actions", padding=(10, 10))
+        actions_frame.pack(fill="both", expand=True, padx=10, pady=10)
+
+        ttk.Button(actions_frame, text="Simulate CPU Stress", command=self.simulate_cpu_stress).pack(pady=5)
+        ttk.Button(actions_frame, text="Simulate Memory Stress", command=self.simulate_memory_stress).pack(pady=5)
+        ttk.Button(actions_frame, text="Simulate Disk I/O Stress", command=self.simulate_disk_io_stress).pack(pady=5)
+        ttk.Button(actions_frame, text="Simulate GPU Load", command=self.simulate_gpu_load).pack(pady=5)
+        ttk.Button(actions_frame, text="Run Compilation Task", command=self.run_compilation_task).pack(pady=5)
+        ttk.Button(actions_frame, text="Simulate Network Flood", command=self.simulate_network_flood).pack(pady=5)
+        ttk.Button(actions_frame, text="Fill Disk Until Threshold", command=self.fill_disk_until_threshold).pack(pady=5)
+        ttk.Button(actions_frame, text="Play Streaming Video", command=self.play_streaming_video).pack(pady=5)
+        ttk.Button(actions_frame, text="Spawn Multiple Processes", command=self.spawn_multiple_processes).pack(pady=5)
+        ttk.Button(actions_frame, text="Simulate Disk Latency", command=self.simulate_disk_latency).pack(pady=5)
+        ttk.Button(actions_frame, text="Stress Tmpfs", command=self.stress_tmpfs).pack(pady=5)
+
+        # Add button to stop all stress (separated at the bottom)
+        ttk.Button(root, text="Stop All Stress", command=self.clean_resources).pack(pady=10)
 
         # Exit button
-        tk.Button(root, text="Exit", command=self.exit_application).pack(pady=10)
+        ttk.Button(root, text="Exit", command=self.exit_application).pack(pady=10)
 
     def simulate_cpu_stress(self):
         """
@@ -57,25 +73,103 @@ class KernelTuneGUI:
         subprocess.run(["dd", "if=/dev/zero", "of=/tmp/largefile", "bs=1M", "count=256"])
         messagebox.showinfo("Action", "Disk I/O stress simulation completed.")
 
-    def open_video(self):
+    def simulate_gpu_load(self):
         """
-        Opens a video using VLC.
+        Simulates GPU load using glxgears or stress-ng.
         """
-        print("Opening video...")
-        video_path = os.path.join(os.getcwd(), "video", "video.mp4")
+        print("Simulating GPU load...")
         try:
-            subprocess.Popen(["vlc", "--play-and-exit", video_path], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            messagebox.showinfo("Action", "Video opened.")
+            subprocess.Popen(["glxgears"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            messagebox.showinfo("Action", "GPU load simulation started.")
         except FileNotFoundError:
-            messagebox.showerror("Error", "VLC or video file not found.")
+            messagebox.showerror("Error", "glxgears not found. Please install it.")
 
-    def ping_network(self):
+    def run_compilation_task(self):
         """
-        Simulates network traffic by pinging a server.
+        Compiles code.cpp directly to simulate CPU, RAM, and I/O load.
         """
-        print("Pinging network...")
-        subprocess.Popen(["ping", "-c", "4", "8.8.8.8"])
-        messagebox.showinfo("Action", "Ping started.")
+        print("Running compilation task...")
+        utils_dir = os.path.join(os.path.dirname(__file__), "utils")
+        code_file = os.path.join(utils_dir, "code.cpp")
+
+        try:
+            result = subprocess.run(["g++", "-o", "code", code_file], cwd=utils_dir, capture_output=True, text=True)
+            if result.returncode == 0:
+                messagebox.showinfo("Action", "Compilation task completed successfully.")
+            else:
+                messagebox.showerror("Error", f"Compilation failed:\n{result.stderr}")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "g++ not found. Please install it.")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
+
+    def simulate_network_flood(self):
+        """
+        Simulates a network flood using ping.
+        """
+        print("Simulating network flood...")
+        try:
+            subprocess.Popen(["ping", "-f", "8.8.8.8"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            messagebox.showinfo("Action", "Network flood simulation started.")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "Ping command not found.")
+
+    def fill_disk_until_threshold(self):
+        """
+        Fills the disk until a certain threshold is reached.
+        """
+        print("Filling disk until threshold...")
+        try:
+            subprocess.run(["dd", "if=/dev/zero", "of=/tmp/fillfile", "bs=1M", "count=1024"])
+            messagebox.showinfo("Action", "Disk filling simulation completed.")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "dd command not found.")
+
+    def play_streaming_video(self):
+        """
+        Plays a streaming video to simulate network and CPU load.
+        """
+        print("Playing streaming video...")
+        try:
+            subprocess.Popen(["vlc", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            messagebox.showinfo("Action", "Streaming video started.")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "VLC not found. Please install it.")
+
+    def spawn_multiple_processes(self):
+        """
+        Spawns a large number of processes to test the scheduler.
+        """
+        print("Spawning multiple processes...")
+        try:
+            for _ in range(100):  # Crée 100 processus
+                process = subprocess.Popen(["sleep", "100"])
+                self.processes.append(process)
+            messagebox.showinfo("Action", "Spawned multiple processes.")
+        except Exception as e:
+            messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
+
+    def simulate_disk_latency(self):
+        """
+        Simulates disk latency using stress-ng.
+        """
+        print("Simulating disk latency...")
+        try:
+            subprocess.Popen(["stress-ng", "--io", "1", "--timeout", "30"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            messagebox.showinfo("Action", "Disk latency simulation started.")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "stress-ng not found. Please install it.")
+
+    def stress_tmpfs(self):
+        """
+        Simulates memory pressure by writing to tmpfs (/dev/shm).
+        """
+        print("Stressing tmpfs...")
+        try:
+            subprocess.run(["dd", "if=/dev/zero", "of=/dev/shm/tmpfile", "bs=1M", "count=512"])
+            messagebox.showinfo("Action", "Tmpfs stress simulation completed.")
+        except FileNotFoundError:
+            messagebox.showerror("Error", "dd command not found.")
 
     def clean_resources(self):
         """
@@ -90,11 +184,17 @@ class KernelTuneGUI:
         if os.path.exists("/tmp/largefile"):
             os.remove("/tmp/largefile")
 
+        if os.path.exists("/tmp/fillfile"):
+            os.remove("/tmp/fillfile")
+
         if hasattr(self, "memory_stress"):
             del self.memory_stress
 
         os.system("pkill stress")
         os.system("pkill yes")
+        os.system("pkill glxgears")
+        os.system("pkill vlc")
+        os.system("pkill ping")
         messagebox.showinfo("Action", "Resources cleaned.")
 
     def open_monitor(self):
