@@ -5,6 +5,7 @@ import os
 import multiprocessing
 import psutil
 from monitor_interface import SystemMonitorGUI
+from agent import EventAgent
 
 class KernelTuneGUI:
     def __init__(self, root):
@@ -12,6 +13,9 @@ class KernelTuneGUI:
         self.root.title("Kernel Tune Interface")
         self.root.geometry("400x700")
         self.processes = []
+
+        # Initialize the EventAgent
+        self.agent = EventAgent()
 
         # Header
         header = ttk.Label(root, text="Kernel Tune Interface", font=("Arial", 16, "bold"))
@@ -55,6 +59,7 @@ class KernelTuneGUI:
             process = multiprocessing.Process(target=_cpu_stress_worker)
             process.start()
             self.processes.append(process)
+        self.agent.handle_event("Simulate CPU Stress")
         messagebox.showinfo("Action", "CPU stress simulation started.")
 
     def simulate_memory_stress(self):
@@ -63,6 +68,7 @@ class KernelTuneGUI:
         """
         print("Simulating memory stress...")
         self.memory_stress = [" " * 10**6 for _ in range(10**4)]  # Allocate 10MB
+        self.agent.handle_event("Simulate Memory Stress")
         messagebox.showinfo("Action", "Memory stress simulation started.")
 
     def simulate_disk_io_stress(self):
@@ -71,6 +77,7 @@ class KernelTuneGUI:
         """
         print("Simulating disk I/O stress...")
         subprocess.run(["dd", "if=/dev/zero", "of=/tmp/largefile", "bs=1M", "count=256"])
+        self.agent.handle_event("Simulate Disk I/O Stress")
         messagebox.showinfo("Action", "Disk I/O stress simulation completed.")
 
     def simulate_gpu_load(self):
@@ -80,6 +87,7 @@ class KernelTuneGUI:
         print("Simulating GPU load...")
         try:
             subprocess.Popen(["glxgears"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            self.agent.handle_event("Simulate GPU Load")
             messagebox.showinfo("Action", "GPU load simulation started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "glxgears not found. Please install it.")
@@ -102,6 +110,8 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "g++ not found. Please install it.")
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
+        finally:
+            self.agent.handle_event("Run Compilation Task")
 
     def simulate_network_flood(self):
         """
@@ -110,6 +120,7 @@ class KernelTuneGUI:
         print("Simulating network flood...")
         try:
             subprocess.Popen(["ping", "-f", "8.8.8.8"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            self.agent.handle_event("Simulate Network Flood")
             messagebox.showinfo("Action", "Network flood simulation started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "Ping command not found.")
@@ -121,6 +132,7 @@ class KernelTuneGUI:
         print("Filling disk until threshold...")
         try:
             subprocess.run(["dd", "if=/dev/zero", "of=/tmp/fillfile", "bs=1M", "count=1024"])
+            self.agent.handle_event("Fill Disk Until Threshold")
             messagebox.showinfo("Action", "Disk filling simulation completed.")
         except FileNotFoundError:
             messagebox.showerror("Error", "dd command not found.")
@@ -132,6 +144,7 @@ class KernelTuneGUI:
         print("Playing streaming video...")
         try:
             subprocess.Popen(["vlc", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            self.agent.handle_event("Play Streaming Video")
             messagebox.showinfo("Action", "Streaming video started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "VLC not found. Please install it.")
@@ -142,9 +155,10 @@ class KernelTuneGUI:
         """
         print("Spawning multiple processes...")
         try:
-            for _ in range(100):  # Crée 100 processus
+            for _ in range(100):  # Create 100 processes
                 process = subprocess.Popen(["sleep", "100"])
                 self.processes.append(process)
+            self.agent.handle_event("Spawn Multiple Processes")
             messagebox.showinfo("Action", "Spawned multiple processes.")
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
@@ -156,6 +170,7 @@ class KernelTuneGUI:
         print("Simulating disk latency...")
         try:
             subprocess.Popen(["stress-ng", "--io", "1", "--timeout", "30"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
+            self.agent.handle_event("Simulate Disk Latency")
             messagebox.showinfo("Action", "Disk latency simulation started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "stress-ng not found. Please install it.")
@@ -167,6 +182,7 @@ class KernelTuneGUI:
         print("Stressing tmpfs...")
         try:
             subprocess.run(["dd", "if=/dev/zero", "of=/dev/shm/tmpfile", "bs=1M", "count=512"])
+            self.agent.handle_event("Stress Tmpfs")
             messagebox.showinfo("Action", "Tmpfs stress simulation completed.")
         except FileNotFoundError:
             messagebox.showerror("Error", "dd command not found.")
