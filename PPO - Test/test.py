@@ -1,5 +1,5 @@
 import numpy as np
-from linux_kernel_env import KernelTuneEnv
+from test_ppo.linux_kernel_env import KernelTuneEnv
 
 def test_environment():
     """

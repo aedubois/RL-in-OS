@@ -1,6 +1,6 @@
 from stable_baselines3 import PPO
 from stable_baselines3.common.env_util import make_vec_env
-from linux_kernel_env import KernelTuneEnv
+from test_ppo.linux_kernel_env import KernelTuneEnv
 
 def main():
     # Create a vectorized environment

@@ -2,7 +2,7 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import time
 from stable_baselines3 import PPO
-from linux_kernel_env import KernelTuneEnv
+from test_ppo.linux_kernel_env import KernelTuneEnv
 
 def main():
     # Load the model
