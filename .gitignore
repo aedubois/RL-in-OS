@@ -1,0 +1,19 @@
+# Python cache and compiled files
+__pycache__/
+*.pyc
+
+# Jupyter notebook checkpoints
+*.ipynb_checkpoints
+
+# Editor settings
+.vscode/
+
+# Large data/model files
+First Scenario - Desktop/q_table.npy
+
+# Temporary files from stress tests
+/tmp/fillfile
+/dev/shm/tmpfs_stress
+
+# OS-specific files
+.DS_Store
