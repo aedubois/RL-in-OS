@@ -42,7 +42,7 @@ def apply_negative_action(action):
         client_proc = subprocess.Popen("iperf3 -c 127.0.0.1 -t 8", shell=True)
         return (server_proc, client_proc)
     elif action == "simulate_swap_stress":
-        return subprocess.Popen("stress-ng --swap 2 --timeout 8", shell=True)
+        return subprocess.Popen("sudo stress-ng --swap 2 --timeout 8", shell=True)
     elif action == "simulate_high_load":
         return subprocess.Popen("timeout 8s yes > /dev/null", shell=True)
     elif action == "simulate_temp_increase":
@@ -108,7 +108,7 @@ def train_agent(num_episodes=100, learning_rate=0.1, discount_factor=0.9, explor
 
         clean_resources()
 
-    np.save("q_table.npy", agent.q_table)
+    np.save("First Scenario - Desktop/q_table.npy", agent.q_table)
 
     pd.Series(rewards_per_episode).rolling(10).mean().plot(title="Mean Reward (window=10)")
     plt.show()
