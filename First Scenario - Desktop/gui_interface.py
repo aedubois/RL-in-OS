@@ -16,13 +16,14 @@ class KernelTuneGUI:
     def __init__(self, root):
         self.root = root
         self.root.title("Kernel Tune Interface")
-        self.root.geometry("500x900")  # Enlarged window
+        self.root.geometry("500x900")
         self.processes = []
 
         # --- For metrics and logs collection ---
         self.t0 = time.time()
         self.metrics = []
         self.logs = []
+        self.agent_logs = []
         self.collecting = True
 
         # Initialize the EventAgent
@@ -81,6 +82,7 @@ class KernelTuneGUI:
         self.t0 = time.time()
         self.metrics = []
         self.logs = []
+        self.agent_logs = []
         messagebox.showinfo("Timer", "Timer reset.")
 
     def collect_metrics(self):
@@ -89,12 +91,10 @@ class KernelTuneGUI:
             cpu = psutil.cpu_percent()
             ram = psutil.virtual_memory().percent
             swap = psutil.swap_memory().percent
-            # Try to get CPU temperature (Linux only, may require sensors)
             temp = None
             try:
                 temps = psutil.sensors_temperatures()
                 if temps:
-                    # Try to find a CPU sensor
                     for name, entries in temps.items():
                         for entry in entries:
                             if hasattr(entry, 'label') and ('cpu' in entry.label.lower() or 'core' in entry.label.lower()):
@@ -103,19 +103,16 @@ class KernelTuneGUI:
                         if temp is not None:
                             break
                     if temp is None:
-                        # Fallback: take first available temperature
                         for entries in temps.values():
                             if entries:
                                 temp = entries[0].current
                                 break
             except Exception:
                 temp = None
-            # Additional metrics
             disk = psutil.disk_usage('/').percent
             net = psutil.net_io_counters()
             net_sent = net.bytes_sent
             net_recv = net.bytes_recv
-            # Free space in GB
             free_disk_gb = shutil.disk_usage('/').free / (1024**3)
             used_disk_gb = shutil.disk_usage('/').used / (1024**3)
             total_disk_gb = shutil.disk_usage('/').total / (1024**3)
@@ -150,6 +147,10 @@ class KernelTuneGUI:
         t = time.time() - self.t0
         self.logs.append({"time": t, "action": action})
 
+    def log_agent_reaction(self, reaction):
+        t = time.time() - self.t0
+        self.agent_logs.append({"time": t, "reaction": reaction})
+
     def generate_plot(self):
         if not self.metrics:
             messagebox.showerror("Plot", "No data to display.")
@@ -177,14 +178,19 @@ class KernelTuneGUI:
             plt.plot(times, temp_norm, label="CPU Temp", color='tab:red')
         plt.grid(alpha=0.2)
 
-        # Discrete action markers (triangle)
+        # User action markers 
         for log in self.logs:
-            plt.scatter(log["time"], 1.02, marker="v", color="black")
+            plt.scatter(log["time"], 1.02, marker="v", color="black", label="User Action" if log == self.logs[0] else "")
             plt.text(log["time"], 1.05, log["action"], rotation=90, verticalalignment='bottom', fontsize=7)
+
+        # Agent reaction markers 
+        for agent_log in self.agent_logs:
+            plt.scatter(agent_log["time"], -0.08, marker="*", color="purple", s=120, label="Agent Reaction" if agent_log == self.agent_logs[0] else "")
+            plt.text(agent_log["time"], -0.13, agent_log["reaction"], rotation=90, verticalalignment='top', fontsize=7, color="purple")
 
         plt.xlabel("Time (s)")
         plt.ylabel("Normalized metrics")
-        plt.ylim(0, 1.15)
+        plt.ylim(-0.18, 1.15)
         plt.legend()
         plt.tight_layout()
         plots_dir = os.path.join(os.path.dirname(__file__), "plots")
@@ -228,7 +234,6 @@ class KernelTuneGUI:
                 f.write(f"{log['time']:.2f}s : {log['action']}\n")
         messagebox.showinfo("Logs", f"Action logs saved in {log_path}")
 
-    # --- Actions (ajoute log_action à chaque action) ---
     def simulate_cpu_stress(self):
         def _cpu_stress_worker():
             while True:
@@ -238,30 +243,38 @@ class KernelTuneGUI:
             process = multiprocessing.Process(target=_cpu_stress_worker)
             process.start()
             self.processes.append(process)
-        self.agent.handle_event("Simulate CPU Stress")
         self.log_action("Simulate CPU Stress")
+        time.sleep(1)
+        reaction = self.agent.handle_event("Simulate CPU Stress", plot=True)
+        self.log_agent_reaction(reaction)
         messagebox.showinfo("Action", "CPU stress simulation started.")
 
     def simulate_memory_stress(self):
         print("Simulating memory stress...")
         self.memory_stress = [" " * 10**6 for _ in range(10**4)]
-        self.agent.handle_event("Simulate Memory Stress")
         self.log_action("Simulate Memory Stress")
+        time.sleep(1)
+        reaction = self.agent.handle_event("Simulate Memory Stress", plot=True)
+        self.log_agent_reaction(reaction)
         messagebox.showinfo("Action", "Memory stress simulation started.")
 
     def simulate_disk_io_stress(self):
         print("Simulating disk I/O stress...")
         subprocess.run(["dd", "if=/dev/zero", "of=/tmp/largefile", "bs=1M", "count=256"])
-        self.agent.handle_event("Simulate Disk I/O Stress")
         self.log_action("Simulate Disk I/O Stress")
+        time.sleep(1)
+        reaction = self.agent.handle_event("Simulate Disk I/O Stress", plot=True)
+        self.log_agent_reaction(reaction)
         messagebox.showinfo("Action", "Disk I/O stress simulation completed.")
 
     def simulate_gpu_load(self):
         print("Simulating GPU load...")
         try:
             subprocess.Popen(["glxgears"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            self.agent.handle_event("Simulate GPU Load")
             self.log_action("Simulate GPU Load")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Simulate GPU Load", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "GPU load simulation started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "glxgears not found. Please install it.")
@@ -284,15 +297,19 @@ class KernelTuneGUI:
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
         finally:
-            self.agent.handle_event("Run Compilation Task")
             self.log_action("Run Compilation Task")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Run Compilation Task", plot=True)
+            self.log_agent_reaction(reaction)
 
     def simulate_network_flood(self):
         print("Simulating network flood...")
         try:
             subprocess.Popen(["ping", "-f", "8.8.8.8"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            self.agent.handle_event("Simulate Network Flood")
             self.log_action("Simulate Network Flood")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Simulate Network Flood", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "Network flood simulation started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "Ping command not found.")
@@ -301,8 +318,10 @@ class KernelTuneGUI:
         print("Filling disk until threshold...")
         try:
             subprocess.run(["dd", "if=/dev/zero", "of=/tmp/fillfile", "bs=1M", "count=1024"])
-            self.agent.handle_event("Fill Disk Until Threshold")
             self.log_action("Fill Disk Until Threshold")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Fill Disk Until Threshold", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "Disk filling simulation completed.")
         except FileNotFoundError:
             messagebox.showerror("Error", "dd command not found.")
@@ -311,8 +330,10 @@ class KernelTuneGUI:
         print("Playing streaming video...")
         try:
             subprocess.Popen(["vlc", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            self.agent.handle_event("Play Streaming Video")
             self.log_action("Play Streaming Video")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Play Streaming Video", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "Streaming video started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "VLC not found. Please install it.")
@@ -323,8 +344,10 @@ class KernelTuneGUI:
             for _ in range(100):
                 process = subprocess.Popen(["sleep", "100"])
                 self.processes.append(process)
-            self.agent.handle_event("Spawn Multiple Processes")
             self.log_action("Spawn Multiple Processes")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Spawn Multiple Processes", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "Spawned multiple processes.")
         except Exception as e:
             messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
@@ -333,8 +356,10 @@ class KernelTuneGUI:
         print("Simulating disk latency...")
         try:
             subprocess.Popen(["stress-ng", "--io", "1", "--timeout", "30"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
-            self.agent.handle_event("Simulate Disk Latency")
             self.log_action("Simulate Disk Latency")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Simulate Disk Latency", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "Disk latency simulation started.")
         except FileNotFoundError:
             messagebox.showerror("Error", "stress-ng not found. Please install it.")
@@ -343,8 +368,10 @@ class KernelTuneGUI:
         print("Stressing tmpfs...")
         try:
             subprocess.run(["dd", "if=/dev/zero", "of=/dev/shm/tmpfile", "bs=1M", "count=512"])
-            self.agent.handle_event("Stress Tmpfs")
             self.log_action("Stress Tmpfs")
+            time.sleep(1)
+            reaction = self.agent.handle_event("Stress Tmpfs", plot=True)
+            self.log_agent_reaction(reaction)
             messagebox.showinfo("Action", "Tmpfs stress simulation completed.")
         except FileNotFoundError:
             messagebox.showerror("Error", "dd command not found.")
@@ -366,7 +393,8 @@ class KernelTuneGUI:
         os.system("pkill glxgears")
         os.system("pkill vlc")
         os.system("pkill ping")
-        self.agent.handle_event("Stop All Stress")
+        reaction = self.agent.handle_event("Stop All Stress", plot=True)
+        self.log_agent_reaction(reaction)
         self.log_action("Stop All Stress")
         messagebox.showinfo("Action", "Resources cleaned.")
 

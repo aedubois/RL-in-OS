@@ -1,14 +1,12 @@
-10.03s : Simulate CPU Stress
-19.25s : Simulate Memory Stress
-24.32s : Simulate Disk I/O Stress
-28.81s : Simulate GPU Load
-35.06s : Stop All Stress
-44.49s : Run Compilation Task
-46.54s : Simulate Network Flood
-50.67s : Fill Disk Until Threshold
-54.38s : Play Streaming Video
-60.28s : Stop All Stress
-64.05s : Spawn Multiple Processes
-68.29s : Simulate Disk Latency
-73.93s : Stress Tmpfs
-79.29s : Stop All Stress
+1.88s : Simulate CPU Stress
+13.77s : Simulate Memory Stress
+19.89s : Simulate Disk I/O Stress
+24.63s : Simulate GPU Load
+33.61s : Run Compilation Task
+36.76s : Simulate Network Flood
+50.84s : Fill Disk Until Threshold
+57.95s : Play Streaming Video
+63.59s : Spawn Multiple Processes
+69.14s : Simulate Disk Latency
+74.42s : Stress Tmpfs
+85.15s : Stop All Stress

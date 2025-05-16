@@ -115,19 +115,23 @@ class EventAgent:
         if 100 - self.state["disk_usage"] < self.thresholds["low_disk_space"]:
             self.handle_event("Low Disk Space")
 
-    def handle_event(self, event_type):
+    def handle_event(self, event_type, plot=False):
         """
         Handle events triggered by GUI or thresholds.
+        If plot=True, return the action description for display.
         """
         print(f"Event received: {event_type}")
         state = self.get_normalized_state()
-        action = self.select_action(state)
-        self.apply_action(action)
+        action_idx = self.select_action(state)
+        action_name = self.actions[action_idx]
+        reaction_text = self.apply_action(action_idx, return_text=plot)
         time.sleep(1)
         self.update_metrics_once()
         new_state = self.get_normalized_state()
         reward = self.compute_reward(state, new_state)
-        self.learn(state, action, reward, new_state)
+        self.learn(state, action_idx, reward, new_state)
+        if plot:
+            return reaction_text
 
     def update_metrics_once(self):
         """
@@ -178,50 +182,55 @@ class EventAgent:
         else:
             return np.argmax(self.q_table[discretized_state])
 
-    def apply_action(self, action_idx):
+    def apply_action(self, action_idx, return_text=False):
         """
         Apply the selected action to the system.
+        If return_text is True, return a description of the action.
         """
         action = self.actions[action_idx]
+        reaction = ""
         if action == "reduce_swappiness":
             os.system("sudo sysctl -w vm.swappiness=10")
-            print("Swappiness reduced to 10.")
+            reaction = "Swappiness reduced to 10."
         elif action == "increase_dirty_ratio":
             os.system("sudo sysctl -w vm.dirty_ratio=40")
-            print("Dirty ratio increased to 40.")
+            reaction = "Dirty ratio increased to 40."
         elif action == "set_cpu_powersave":
             os.system("sudo sh -c 'echo powersave > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
-            print("CPU set to powersave mode.")
+            reaction = "CPU set to powersave mode."
         elif action == "set_cpu_performance":
             os.system("sudo sh -c 'echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
-            print("CPU set to performance mode.")
+            reaction = "CPU set to performance mode."
         elif action == "lower_process_priority":
             os.system("sudo renice +10 -p $(pgrep stress)")
-            print("Process priority lowered.")
+            reaction = "Process priority lowered."
         elif action == "reduce_io_threads":
             os.system("sudo pkill -f 'stress-ng --io'")
-            print("Simulated reduction of I/O threads by killing stress-ng I/O processes.")
+            reaction = "Kill stress-ng I/O processes."
         elif action == "drop_caches":
             os.system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'")
-            print("Caches dropped.")
+            reaction = "Caches dropped."
         elif action == "enable_zswap":
             os.system("sudo sh -c 'echo 1 > /sys/module/zswap/parameters/enabled'")
-            print("Zswap enabled.")
+            reaction = "Zswap enabled."
         elif action == "increase_read_ahead":
             disk = get_main_disk()
             os.system(f"sudo blockdev --setra 512 {disk}")
-            print(f"Read-ahead increased to 512 on {disk}.")
+            reaction = f"Read-ahead increased to 512."
         elif action == "kill_stress_processes":
             os.system("sudo pkill -f stress-ng")
             os.system("sudo pkill -f yes")
             os.system("sudo pkill -f vlc")
             os.system("sudo pkill -f iperf3")
-            print("All stress processes killed.")
+            reaction = "All stress processes killed."
         elif action == "clean_tmp":
             os.system("sudo rm -rf /tmp/*")
-            print("Temporary files cleaned.")
+            reaction = "Temporary files cleaned."
         else:
-            print(f"Unknown action: {action}")
+            reaction = f"Unknown action: {action}"
+        print(reaction)
+        if return_text:
+            return reaction
 
     def compute_reward(self, state, new_state, debug=False):
         """
