@@ -97,8 +97,12 @@ class KernelTuneGUI:
         Compiles code.cpp directly to simulate CPU, RAM, and I/O load.
         """
         print("Running compilation task...")
-        utils_dir = os.path.join(os.path.dirname(__file__), "utils")
+        utils_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "utils")
         code_file = os.path.join(utils_dir, "code.cpp")
+
+        if not os.path.exists(code_file):
+            messagebox.showerror("Error", f"code.cpp introuvable dans {utils_dir}")
+            return
 
         try:
             result = subprocess.run(["g++", "-o", "code", code_file], cwd=utils_dir, capture_output=True, text=True)
