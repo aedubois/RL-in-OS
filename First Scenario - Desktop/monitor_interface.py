@@ -8,6 +8,7 @@ import os
 
 class SystemMonitorGUI:
     def __init__(self, root):
+        """Initializes the GUI for the system monitor."""
         self.root = root
         self.root.title("System Monitor")
         self.root.geometry("500x600")
@@ -61,9 +62,7 @@ class SystemMonitorGUI:
         self.root.protocol("WM_DELETE_WINDOW", self.close)
 
     def update_metrics(self):
-        """
-        Updates the system metrics in the GUI.
-        """
+        """Updates the system metrics in the GUI."""
         while self.running:
             try:
                 # Collect metrics
@@ -134,9 +133,7 @@ class SystemMonitorGUI:
                 print(f"Error updating metrics: {e}")
 
     def close(self):
-        """
-        Stops the update thread and closes the window.
-        """
+        """Stops the update thread and closes the window."""
         self.running = False
         self.root.destroy()
 

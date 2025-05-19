@@ -14,12 +14,13 @@ from agent import EventAgent
 
 class KernelTuneGUI:
     def __init__(self, root):
+        """Initialize the GUI."""
         self.root = root
         self.root.title("Kernel Tune Interface")
         self.root.geometry("500x900")
         self.processes = []
 
-        # --- For metrics and logs collection ---
+        # Metrics and logs collection
         self.t0 = time.time()
         self.metrics = []
         self.logs = []
@@ -33,7 +34,7 @@ class KernelTuneGUI:
         header = ttk.Label(root, text="Kernel Tune Interface", font=("Arial", 16, "bold"))
         header.pack(pady=10)
 
-        # Button to open the monitoring window (at the top)
+        # Button to open the monitoring window
         ttk.Button(root, text="Open System Monitor", command=self.open_monitor).pack(pady=10)
 
         # Dynamic elapsed time display
@@ -47,7 +48,7 @@ class KernelTuneGUI:
         ttk.Button(root, text="Save metrics logs", command=self.save_metrics_csv).pack(pady=5)
         ttk.Button(root, text="Reset timer", command=self.reset_timer).pack(pady=5)
 
-        # Create buttons for each action
+        # Buttons for each action
         actions_frame = ttk.LabelFrame(root, text="Actions", padding=(10, 10))
         actions_frame.pack(fill="both", expand=True, padx=10, pady=10)
 
@@ -63,7 +64,7 @@ class KernelTuneGUI:
         ttk.Button(actions_frame, text="Simulate Disk Latency", command=self.simulate_disk_latency).pack(pady=5)
         ttk.Button(actions_frame, text="Stress Tmpfs", command=self.stress_tmpfs).pack(pady=5)
 
-        # Button to stop all stress (at the bottom)
+        # Button to stop all stress and clean resources
         ttk.Button(root, text="Stop All Stress", command=self.clean_resources).pack(pady=10)
 
         # Exit button
@@ -72,13 +73,14 @@ class KernelTuneGUI:
         # Start metrics collection
         self.collect_metrics()
 
-    # --- Metrics and logs ---
     def update_timer(self):
+        """Update the elapsed time display."""
         elapsed = int(time.time() - self.t0)
         self.time_label.config(text=f"Elapsed time: {elapsed} s")
         self.root.after(1000, self.update_timer)
 
     def reset_timer(self):
+        """Reset the timer and clear logs."""
         self.t0 = time.time()
         self.metrics = []
         self.logs = []
@@ -86,6 +88,7 @@ class KernelTuneGUI:
         messagebox.showinfo("Timer", "Timer reset.")
 
     def collect_metrics(self):
+        """Collect system metrics and store them in the metrics list."""
         if self.collecting:
             t = time.time() - self.t0
             cpu = psutil.cpu_percent()
@@ -144,14 +147,17 @@ class KernelTuneGUI:
             self.root.after(1000, self.collect_metrics)
 
     def log_action(self, action):
+        """Log the user action with the current time."""
         t = time.time() - self.t0
         self.logs.append({"time": t, "action": action})
 
     def log_agent_reaction(self, reaction):
+        """Log the agent's reaction with the current time."""
         t = time.time() - self.t0
         self.agent_logs.append({"time": t, "reaction": reaction})
 
     def generate_plot(self):
+        """Generate a plot of the collected metrics."""
         if not self.metrics:
             messagebox.showerror("Plot", "No data to display.")
             return
@@ -204,6 +210,7 @@ class KernelTuneGUI:
         messagebox.showinfo("Plot", f"Plot saved in {plot_path}")
 
     def save_metrics_csv(self):
+        """Save the collected metrics to a CSV file."""
         logs_dir = os.path.join(os.path.dirname(__file__), "metrics_logs")
         os.makedirs(logs_dir, exist_ok=True)
         i = 1
@@ -223,6 +230,7 @@ class KernelTuneGUI:
         messagebox.showinfo("Metrics", f"Metrics saved in {csv_path}")
 
     def save_actions_logs(self):
+        """Save the action logs to a text file."""
         logs_dir = os.path.join(os.path.dirname(__file__), "actions_logs")
         os.makedirs(logs_dir, exist_ok=True)
         i = 1
@@ -235,10 +243,10 @@ class KernelTuneGUI:
         messagebox.showinfo("Logs", f"Action logs saved in {log_path}")
 
     def simulate_cpu_stress(self):
+        """Simulate CPU stress by creating multiple processes."""
         def _cpu_stress_worker():
             while True:
                 pass
-        print("Simulating CPU stress...")
         for _ in range(multiprocessing.cpu_count() // 2):
             process = multiprocessing.Process(target=_cpu_stress_worker)
             process.start()
@@ -250,7 +258,7 @@ class KernelTuneGUI:
         messagebox.showinfo("Action", "CPU stress simulation started.")
 
     def simulate_memory_stress(self):
-        print("Simulating memory stress...")
+        """Simulate memory stress by allocating large amounts of memory."""
         self.memory_stress = [" " * 10**6 for _ in range(10**4)]
         self.log_action("Simulate Memory Stress")
         time.sleep(1)
@@ -259,7 +267,7 @@ class KernelTuneGUI:
         messagebox.showinfo("Action", "Memory stress simulation started.")
 
     def simulate_disk_io_stress(self):
-        print("Simulating disk I/O stress...")
+        """Simulate disk I/O stress by writing large files."""
         subprocess.run(["dd", "if=/dev/zero", "of=/tmp/largefile", "bs=1M", "count=256"])
         self.log_action("Simulate Disk I/O Stress")
         time.sleep(1)
@@ -268,7 +276,7 @@ class KernelTuneGUI:
         messagebox.showinfo("Action", "Disk I/O stress simulation completed.")
 
     def simulate_gpu_load(self):
-        print("Simulating GPU load...")
+        """Simulate GPU load using glxgears."""
         try:
             subprocess.Popen(["glxgears"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             self.log_action("Simulate GPU Load")
@@ -280,7 +288,7 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "glxgears not found. Please install it.")
 
     def run_compilation_task(self):
-        print("Running compilation task...")
+        """Run a compilation task using g++."""
         utils_dir = os.path.join(os.path.dirname(os.path.dirname(__file__)), "utils")
         code_file = os.path.join(utils_dir, "code.cpp")
         if not os.path.exists(code_file):
@@ -303,7 +311,7 @@ class KernelTuneGUI:
             self.log_agent_reaction(reaction)
 
     def simulate_network_flood(self):
-        print("Simulating network flood...")
+        """Simulate network flood using ping."""
         try:
             subprocess.Popen(["ping", "-f", "8.8.8.8"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             self.log_action("Simulate Network Flood")
@@ -315,7 +323,7 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "Ping command not found.")
 
     def fill_disk_until_threshold(self):
-        print("Filling disk until threshold...")
+        """Fill the disk until a certain threshold."""
         try:
             subprocess.run(["dd", "if=/dev/zero", "of=/tmp/fillfile", "bs=1M", "count=1024"])
             self.log_action("Fill Disk Until Threshold")
@@ -327,7 +335,7 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "dd command not found.")
 
     def play_streaming_video(self):
-        print("Playing streaming video...")
+        """Play a streaming video using VLC."""
         try:
             subprocess.Popen(["vlc", "https://www.youtube.com/watch?v=dQw4w9WgXcQ"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             self.log_action("Play Streaming Video")
@@ -339,7 +347,7 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "VLC not found. Please install it.")
 
     def spawn_multiple_processes(self):
-        print("Spawning multiple processes...")
+        """Spawn multiple processes to simulate high load."""
         try:
             for _ in range(100):
                 process = subprocess.Popen(["sleep", "100"])
@@ -353,7 +361,7 @@ class KernelTuneGUI:
             messagebox.showerror("Error", f"An unexpected error occurred:\n{e}")
 
     def simulate_disk_latency(self):
-        print("Simulating disk latency...")
+        """Simulate disk latency using stress-ng."""
         try:
             subprocess.Popen(["stress-ng", "--io", "1", "--timeout", "30"], stderr=subprocess.DEVNULL, stdout=subprocess.DEVNULL)
             self.log_action("Simulate Disk Latency")
@@ -365,7 +373,7 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "stress-ng not found. Please install it.")
 
     def stress_tmpfs(self):
-        print("Stressing tmpfs...")
+        """Stress the tmpfs filesystem."""
         try:
             subprocess.run(["dd", "if=/dev/zero", "of=/dev/shm/tmpfile", "bs=1M", "count=512"])
             self.log_action("Stress Tmpfs")
@@ -377,32 +385,20 @@ class KernelTuneGUI:
             messagebox.showerror("Error", "dd command not found.")
 
     def clean_resources(self):
-        print("Cleaning up resources...")
-        for process in self.processes:
-            if isinstance(process, multiprocessing.Process):
-                process.terminate()
-        self.processes = []
-        if os.path.exists("/tmp/largefile"):
-            os.remove("/tmp/largefile")
-        if os.path.exists("/tmp/fillfile"):
-            os.remove("/tmp/fillfile")
-        if hasattr(self, "memory_stress"):
-            del self.memory_stress
-        os.system("pkill stress")
-        os.system("pkill yes")
-        os.system("pkill glxgears")
-        os.system("pkill vlc")
-        os.system("pkill ping")
+        """Stop all stress processes and clean resources."""
+        self.agent.clean_resources()
         reaction = self.agent.handle_event("Stop All Stress", plot=True)
         self.log_agent_reaction(reaction)
         self.log_action("Stop All Stress")
         messagebox.showinfo("Action", "Resources cleaned.")
 
     def open_monitor(self):
+        """Open the system monitor window."""
         monitor_root = tk.Toplevel(self.root)
         SystemMonitorGUI(monitor_root)
 
     def exit_application(self):
+        """Exit the application."""
         self.clean_resources()
         self.root.destroy()
 

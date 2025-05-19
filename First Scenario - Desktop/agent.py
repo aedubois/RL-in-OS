@@ -9,11 +9,14 @@ if os.geteuid() != 0:
     print("Warning: Some actions require root privileges. You may be prompted for your password.")
 
 def get_main_disk():
+    """
+    Get the main disk device.
+    """
     partitions = psutil.disk_partitions()
     for p in partitions:
         if p.mountpoint == '/':
             return p.device
-    return '/dev/sda'  # fallback
+    return '/dev/sda' # Default to /dev/sda if not found
 
 class EventAgent:
     def __init__(self):
@@ -49,13 +52,13 @@ class EventAgent:
             "clean_tmp",
         ]
         self.bins = {
-            "cpu_usage": np.linspace(0, 100, 11),
-            "memory_usage": np.linspace(0, 100, 11),
-            "swap_usage": np.linspace(0, 50, 6),
-            "load_average": np.linspace(0, 10, 11),
-            "disk_usage": np.linspace(0, 100, 11),
-            "temperature": np.linspace(0, 100, 11),
-            "io_wait": np.linspace(0, 20, 5),
+            "cpu_usage": np.linspace(0, 1, 5),      
+            "memory_usage": np.linspace(0, 1, 5),  
+            "swap_usage": np.linspace(0, 1, 3),   
+            "load_average": np.linspace(0, 1, 5), 
+            "disk_usage": np.linspace(0, 1, 5),    
+            "temperature": np.linspace(0, 1, 5),    
+            "io_wait": np.linspace(0, 1, 3),     
         }
         q_table_shape = tuple(len(bins) - 1 for bins in self.bins.values()) + (len(self.actions),)
         if os.path.exists("q_table.npy"):
@@ -159,24 +162,33 @@ class EventAgent:
             min(1, self.state["io_wait"] / 20),
         ])
 
-    def get_discretized_state(self):
+    def discretize_state(self, state):
         """
-        Discretize state metrics using bins.
+        Discretize the state into bins for Q-learning.
         """
+        metrics_order = [
+            "cpu_usage",
+            "memory_usage",
+            "swap_usage",
+            "load_average",
+            "disk_usage",
+            "temperature",
+            "io_wait",
+        ]
         discretized_state = []
-        for metric, value in self.state.items():
-            if metric in self.bins:
-                bin_edges = self.bins[metric]
-                bin_idx = np.digitize(value, bin_edges) - 1
-                bin_idx = max(0, min(bin_idx, len(bin_edges) - 2))
-                discretized_state.append(bin_idx)
+        for i, metric in enumerate(metrics_order):
+            value = state[i]
+            bin_edges = self.bins[metric]
+            bin_idx = np.digitize(value, bin_edges) - 1
+            bin_idx = max(0, min(bin_idx, len(bin_edges) - 2))
+            discretized_state.append(bin_idx)
         return tuple(discretized_state)
 
     def select_action(self, state):
         """
-        Select action based on Q-table and exploration rate.
+        Select an action based on the current state using epsilon-greedy policy
         """
-        discretized_state = self.get_discretized_state()
+        discretized_state = self.discretize_state(state)
         if np.random.uniform(0, 1) < self.exploration_rate:
             return np.random.randint(0, len(self.actions))
         else:
@@ -253,10 +265,10 @@ class EventAgent:
 
     def learn(self, state, action, reward, new_state):
         """
-        Update Q-table based on action and reward.
+        Update Q-table using the Q-learning algorithm.
         """
-        state_idx = self.get_discretized_state()
-        new_state_idx = self.get_discretized_state()
+        state_idx = self.discretize_state(state)
+        new_state_idx = self.discretize_state(new_state)
         self.q_table[state_idx][action] = self.q_table[state_idx][action] + self.learning_rate * (
             reward + self.discount_factor * np.max(self.q_table[new_state_idx]) - self.q_table[state_idx][action]
         )
@@ -267,6 +279,39 @@ class EventAgent:
         """
         self.running = False
         print("EventAgent stopped.")
+
+    def save_q_table(self, path):
+        np.save(path, self.q_table)
+
+    def clean_resources(self):
+        """
+        Clean up resources and processes.
+        """
+        if hasattr(self, "processes"):
+            for process in self.processes:
+                try:
+                    if hasattr(process, "terminate"):
+                        process.terminate()
+                except Exception as e:
+                    print(f"Error terminating process: {e}")
+            self.processes = []
+        # Remove temporary files
+        for path in ["/tmp/largefile", "/tmp/fillfile", "/dev/shm/tmpfs_stress"]:
+            if os.path.exists(path):
+                try:
+                    os.remove(path)
+                except Exception as e:
+                    print(f"Error removing {path}: {e}")
+        if hasattr(self, "memory_stress"):
+            del self.memory_stress
+        # Kill any remaining stress processes
+        os.system("pkill -f stress-ng")
+        os.system("pkill -f stress")
+        os.system("pkill -f yes")
+        os.system("pkill -f glxgears")
+        os.system("pkill -f vlc")
+        os.system("pkill -f iperf3")
+        os.system("pkill -f ping")
 
 if __name__ == "__main__":
     agent = EventAgent()

@@ -1,7 +1,5 @@
 import time
-import numpy as np
 import random
-import os
 import subprocess
 from agent import EventAgent
 import matplotlib.pyplot as plt
@@ -21,9 +19,7 @@ NEGATIVE_ACTIONS = [
 ]
 
 def apply_negative_action(action):
-    """
-    Launches a negative action (system stress) based on the action name.
-    """
+    """Launches a negative action (system stress) based on the action name."""
     if action == "simulate_cpu_stress":
         return subprocess.Popen("stress-ng --cpu 2 --timeout 8", shell=True)
     elif action == "simulate_memory_stress":
@@ -35,7 +31,12 @@ def apply_negative_action(action):
     elif action == "stress_tmpfs":
         return subprocess.Popen("dd if=/dev/zero of=/dev/shm/tmpfs_stress bs=1M count=1024", shell=True)
     elif action == "play_streaming_video":
-        return subprocess.Popen("vlc --intf dummy --run-time=8 --play-and-exit https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4 vlc://quit", shell=True)
+        return subprocess.Popen(
+            "vlc --intf dummy --run-time=8 --play-and-exit https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4 vlc://quit",
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
     elif action == "simulate_network_stress":
         server_proc = subprocess.Popen("iperf3 -s", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         time.sleep(1)
@@ -50,25 +51,18 @@ def apply_negative_action(action):
     else:
         return None
 
-def clean_resources():
-    """
-    Cleans up any leftover processes or files from stress actions.
-    """
-    os.system("pkill -f stress-ng")
-    os.system("pkill -f yes")
-    os.system("pkill -f vlc")
-    os.system("pkill -f iperf3")
-    os.system("rm -f /tmp/fillfile")
-    os.system("rm -f /dev/shm/tmpfs_stress")
-
-def train_agent(num_episodes=100, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, exploration_decay=0.995):
-    """
-    Main training loop for the RL agent.
-    """
+def train_agent(num_episodes=1000, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, exploration_decay=0.995):
+    """Main training loop for the RL agent."""
     agent = EventAgent()
+    agent.learning_rate = learning_rate
+    agent.discount_factor = discount_factor
+    agent.exploration_rate = exploration_rate
+
     rewards_per_episode = []
 
     for episode in range(num_episodes):
+        print(f"Episode {episode+1}/{num_episodes}")
+
         negative_action = random.choice(NEGATIVE_ACTIONS)
         proc = apply_negative_action(negative_action)
         time.sleep(4)
@@ -95,20 +89,16 @@ def train_agent(num_episodes=100, learning_rate=0.1, discount_factor=0.9, explor
         agent.update_metrics_once()
         new_state = agent.get_normalized_state()
 
-        reward = agent.compute_reward(state, new_state, debug=True)
+        reward = agent.compute_reward(state, new_state, debug=False)
 
-        state_idx = agent.get_discretized_state()
-        new_state_idx = agent.get_discretized_state()
-        agent.q_table[state_idx][action_idx] = agent.q_table[state_idx][action_idx] + learning_rate * (
-            reward + discount_factor * np.max(agent.q_table[new_state_idx]) - agent.q_table[state_idx][action_idx]
-        )
+        agent.learn(state, action_idx, reward, new_state)
 
         exploration_rate = max(0.05, exploration_rate * exploration_decay)
         rewards_per_episode.append(reward)
 
-        clean_resources()
+        agent.clean_resources()
 
-    np.save("First Scenario - Desktop/q_table.npy", agent.q_table)
+    agent.save_q_table("First Scenario - Desktop/q_table.npy")
 
     pd.Series(rewards_per_episode).rolling(10).mean().plot(title="Mean Reward (window=10)")
     plt.show()
