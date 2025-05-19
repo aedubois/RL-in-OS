@@ -52,17 +52,17 @@ class EventAgent:
             "clean_tmp",
         ]
         self.bins = {
-            "cpu_usage": np.linspace(0, 1, 5),      
-            "memory_usage": np.linspace(0, 1, 5),  
-            "swap_usage": np.linspace(0, 1, 3),   
-            "load_average": np.linspace(0, 1, 5), 
-            "disk_usage": np.linspace(0, 1, 5),    
-            "temperature": np.linspace(0, 1, 5),    
-            "io_wait": np.linspace(0, 1, 3),     
+            "cpu_usage": np.linspace(0, 1, 4),   
+            "memory_usage": np.linspace(0, 1, 4), 
+            "swap_usage": np.linspace(0, 1, 3),  
+            "load_average": np.linspace(0, 1, 4),   
+            "disk_usage": np.linspace(0, 1, 4),    
+            "temperature": np.linspace(0, 1, 4),   
+            "io_wait": np.linspace(0, 1, 3),       
         }
         q_table_shape = tuple(len(bins) - 1 for bins in self.bins.values()) + (len(self.actions),)
-        if os.path.exists("q_table.npy"):
-            self.q_table = np.load("q_table.npy")
+        if os.path.exists("First Scenario - Desktop/q_table.npy"):
+            self.q_table = np.load("First Scenario - Desktop/q_table.npy")
             print("Q-Table loaded from q_table.npy.")
         else:
             self.q_table = np.zeros(q_table_shape)
@@ -72,7 +72,6 @@ class EventAgent:
         self.exploration_rate = 1.0
         self.exploration_decay = 0.995
         self.running = True
-        print("EventAgent initialized.")
 
     def monitor_metrics(self):
         """
@@ -250,8 +249,10 @@ class EventAgent:
         """
         weights = np.array([1.0, 0.6, 0.8, 0.4, 0.3, 0.9, 0.5])
         delta = state - new_state
-        affected = np.abs(delta) > 0.02
+        affected = np.abs(delta) > 0.01
         reward = np.sum(delta[affected] * weights[affected]) * 10
+        if not np.any(affected):
+            reward -= 1  
         if debug:
             metric_names = ["CPU", "RAM", "SWAP", "Load", "Disk", "Temp", "IOwait"]
             print("\nReward details:")
@@ -278,10 +279,10 @@ class EventAgent:
         Stop the agent's monitoring thread.
         """
         self.running = False
-        print("EventAgent stopped.")
 
     def save_q_table(self, path):
         np.save(path, self.q_table)
+        print(f"Q-Table saved to {path}.")
 
     def clean_resources(self):
         """
