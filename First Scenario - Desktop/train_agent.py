@@ -5,31 +5,23 @@ from agent import EventAgent
 import matplotlib.pyplot as plt
 import pandas as pd
 
-NEGATIVE_ACTIONS = [
-    "simulate_cpu_stress",
-    "simulate_memory_stress",
-    "simulate_disk_fill",
-    "simulate_disk_latency",
-    "stress_tmpfs",
-    "play_streaming_video",
-    "simulate_network_stress",
-    "simulate_swap_stress",
-    "simulate_high_load",
-    "simulate_temp_increase"
-]
-
-NEGATIVE_ACTION_DELAYS = {
-    "simulate_cpu_stress": 1,         # Effet quasi immédiat
-    "simulate_memory_stress": 2,      # Peut prendre un peu de temps
-    "simulate_disk_fill": 3,          # L'écriture peut prendre quelques secondes
-    "simulate_disk_latency": 2,       # Effet rapide mais pas instantané
-    "stress_tmpfs": 2,                # Remplissage rapide
-    "play_streaming_video": 4,        # Lancement du flux, attendre un peu
-    "simulate_network_stress": 2,     # Démarrage rapide
-    "simulate_swap_stress": 3,        # Peut prendre un peu de temps
-    "simulate_high_load": 1,          # Effet immédiat
-    "simulate_temp_increase": 2       # Effet rapide
+NEGATIVE_ACTIONS_INFO = {
+    "simulate_cpu_stress":        1,
+    "simulate_memory_stress":     2,
+    "simulate_disk_fill":         3,
+    "simulate_disk_latency":      2,
+    "stress_tmpfs":               2,
+    "play_streaming_video":       4,
+    "simulate_network_stress":    2,
+    "simulate_swap_stress":       3,
+    "simulate_high_load":         1,
+    "simulate_temp_increase":     2
 }
+
+NEGATIVE_ACTIONS = list(NEGATIVE_ACTIONS_INFO.keys())
+
+def get_negative_action_delay(action):
+    return NEGATIVE_ACTIONS_INFO.get(action, 2)
 
 def apply_negative_action(action):
     """Launches a negative action (system stress) based on the action name."""
@@ -86,45 +78,43 @@ def train_agent(num_episodes=5000, learning_rate=0.1, discount_factor=0.9, explo
     try:
         for episode in range(num_episodes):
             print(f"Episode {episode+1}/{num_episodes}")
-            try:
-                negative_action = random.choice(NEGATIVE_ACTIONS)
-                proc = apply_negative_action(negative_action)
-                # Utilise le délai spécifique à l'action négative
-                delay = NEGATIVE_ACTION_DELAYS.get(negative_action, 2)
-                time.sleep(delay)
+            negative_action = random.choice(NEGATIVE_ACTIONS)
+            proc = apply_negative_action(negative_action)
+            delay = get_negative_action_delay(negative_action)
+            time.sleep(delay)
 
-                agent.update_metrics_once()
-                state = agent.get_normalized_state()
+            agent.update_metrics_once()
+            state = agent.get_normalized_state()
 
-                if negative_action == "simulate_network_stress" and proc is not None:
-                    server_proc, client_proc = proc
-                    client_proc.wait()
-                    server_proc.terminate()
-                    server_proc.wait()
-                elif proc is not None:
-                    proc.wait()
+            if negative_action == "simulate_network_stress" and proc is not None:
+                server_proc, client_proc = proc
+                client_proc.wait()
+                server_proc.terminate()
+                server_proc.wait()
+            elif proc is not None:
+                proc.wait()
 
-                if random.uniform(0, 1) < exploration_rate:
-                    action_idx = random.randint(0, len(agent.actions) - 1)
-                else:
-                    action_idx = agent.select_action(state)
-                agent.apply_action(action_idx)
-                time.sleep(4)
+            if random.uniform(0, 1) < exploration_rate:
+                action_idx = random.randint(0, len(agent.actions) - 1)
+            else:
+                action_idx = agent.select_action(state)
+            agent.apply_action(action_idx)
+            time.sleep(4)
 
-                agent.update_metrics_once()
-                new_state = agent.get_normalized_state()
+            agent.update_metrics_once()
+            new_state = agent.get_normalized_state()
 
-                reward = agent.compute_reward(state, new_state, debug=False)
-                agent.learn(state, action_idx, reward, new_state)
+            reward = agent.compute_reward(state, new_state, debug=False)
+            agent.learn(state, action_idx, reward, new_state)
 
-                exploration_rate = max(0.05, exploration_rate * exploration_decay)
-                agent.exploration_rate = exploration_rate
-                rewards_per_episode.append(reward)
-            finally:
-                agent.clean_resources()
+            exploration_rate = max(0.05, exploration_rate * exploration_decay)
+            agent.exploration_rate = exploration_rate
+            rewards_per_episode.append(reward)
+                
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")
 
+    agent.clean_resources()
     agent.save_q_table("First Scenario - Desktop/q_table.npy")
 
     pd.Series(rewards_per_episode).rolling(10).mean().plot(title="Mean Reward (window=10)")
