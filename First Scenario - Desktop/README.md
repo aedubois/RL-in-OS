@@ -103,6 +103,7 @@ python3 monitor_interface.py
 
 - **Q-table**: Gradually filled, guides the agent to the best actions for each system state.
 - **Logs**: Agent and user actions, system metrics, exportable as CSV.
+- **Plots**: Time-series plots showing the evolution of normalised system metrics (CPU, RAM, Disk, Temperature) with markers for user actions and agent reactions in the `plots/` folder.
 - **Graphical interface**: Real-time visualization of metrics, actions, and agent reactions.
 
 ---
