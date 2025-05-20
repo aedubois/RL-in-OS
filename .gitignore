@@ -17,3 +17,6 @@ First Scenario - Desktop/q_table.npy
 
 # OS-specific files
 .DS_Store
+
+# Virtual environment
+.venv/

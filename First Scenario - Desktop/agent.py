@@ -125,7 +125,6 @@ class EventAgent:
         print(f"Event received: {event_type}")
         state = self.get_normalized_state()
         action_idx = self.select_action(state)
-        action_name = self.actions[action_idx]
         reaction_text = self.apply_action(action_idx, return_text=plot)
         time.sleep(1)
         self.update_metrics_once()
@@ -207,11 +206,19 @@ class EventAgent:
             os.system("sudo sysctl -w vm.dirty_ratio=40")
             reaction = "Dirty ratio increased to 40."
         elif action == "set_cpu_powersave":
-            os.system("sudo sh -c 'echo powersave > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
-            reaction = "CPU set to powersave mode."
+            path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+            if os.path.exists(path):
+                os.system("sudo sh -c 'echo powersave > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
+                reaction = "CPU set to powersave mode."
+            else:
+                reaction = "CPU governor path not found."
         elif action == "set_cpu_performance":
-            os.system("sudo sh -c 'echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
-            reaction = "CPU set to performance mode."
+            path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
+            if os.path.exists(path):
+                os.system("sudo sh -c 'echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
+                reaction = "CPU set to performance mode."
+            else:
+                reaction = "CPU governor path not found."
         elif action == "lower_process_priority":
             os.system("sudo renice +10 -p $(pgrep stress)")
             reaction = "Process priority lowered."

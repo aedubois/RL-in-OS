@@ -18,6 +18,19 @@ NEGATIVE_ACTIONS = [
     "simulate_temp_increase"
 ]
 
+NEGATIVE_ACTION_DELAYS = {
+    "simulate_cpu_stress": 1,         # Effet quasi immédiat
+    "simulate_memory_stress": 2,      # Peut prendre un peu de temps
+    "simulate_disk_fill": 3,          # L'écriture peut prendre quelques secondes
+    "simulate_disk_latency": 2,       # Effet rapide mais pas instantané
+    "stress_tmpfs": 2,                # Remplissage rapide
+    "play_streaming_video": 4,        # Lancement du flux, attendre un peu
+    "simulate_network_stress": 2,     # Démarrage rapide
+    "simulate_swap_stress": 3,        # Peut prendre un peu de temps
+    "simulate_high_load": 1,          # Effet immédiat
+    "simulate_temp_increase": 2       # Effet rapide
+}
+
 def apply_negative_action(action):
     """Launches a negative action (system stress) based on the action name."""
     if action == "simulate_cpu_stress":
@@ -61,7 +74,7 @@ def apply_negative_action(action):
     else:
         return None
 
-def train_agent(num_episodes=500, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, exploration_decay=0.995):
+def train_agent(num_episodes=5000, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, exploration_decay=0.995):
     """Main training loop for the RL agent."""
     agent = EventAgent()
     agent.learning_rate = learning_rate
@@ -76,7 +89,9 @@ def train_agent(num_episodes=500, learning_rate=0.1, discount_factor=0.9, explor
             try:
                 negative_action = random.choice(NEGATIVE_ACTIONS)
                 proc = apply_negative_action(negative_action)
-                time.sleep(4)
+                # Utilise le délai spécifique à l'action négative
+                delay = NEGATIVE_ACTION_DELAYS.get(negative_action, 2)
+                time.sleep(delay)
 
                 agent.update_metrics_once()
                 state = agent.get_normalized_state()

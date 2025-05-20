@@ -424,6 +424,7 @@ class KernelTuneGUI:
     def exit_application(self):
         """Exit the application."""
         self.clean_resources()
+        self.agent.save_q_table("First Scenario - Desktop/q_table.npy") 
         self.root.destroy()
 
     def show_activity(self, message="Processing..."):
