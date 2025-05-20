@@ -2,8 +2,6 @@ import time
 import random
 import subprocess
 from agent import EventAgent
-import matplotlib.pyplot as plt
-import pandas as pd
 
 NEGATIVE_ACTIONS_INFO = {
     "simulate_cpu_stress":        1,
@@ -73,8 +71,6 @@ def train_agent(num_episodes=5000, learning_rate=0.1, discount_factor=0.9, explo
     agent.discount_factor = discount_factor
     agent.exploration_rate = exploration_rate
 
-    rewards_per_episode = []
-
     try:
         for episode in range(num_episodes):
             print(f"Episode {episode+1}/{num_episodes}")
@@ -109,16 +105,12 @@ def train_agent(num_episodes=5000, learning_rate=0.1, discount_factor=0.9, explo
 
             exploration_rate = max(0.05, exploration_rate * exploration_decay)
             agent.exploration_rate = exploration_rate
-            rewards_per_episode.append(reward)
                 
     except KeyboardInterrupt:
         print("\nTraining interrupted by user.")
 
     agent.clean_resources()
     agent.save_q_table("First Scenario - Desktop/q_table.npy")
-
-    pd.Series(rewards_per_episode).rolling(10).mean().plot(title="Mean Reward (window=10)")
-    plt.show()
 
 if __name__ == "__main__":
     train_agent()

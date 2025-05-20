@@ -1,4 +1,3 @@
-import subprocess
 import psutil
 import os
 import threading
