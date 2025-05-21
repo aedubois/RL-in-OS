@@ -3,60 +3,60 @@
     "params": {
       "dirty_ratio": "40",
       "rmem_max": "1048576",
-      "wmem_max": "1048576",
+      "wmem_max": "16777216",
       "zswap": "N"
     },
-    "reward": 18915.60022912151,
-    "rps": 30780.31,
-    "latency": 0.66884,
-    "timestamp": "2025-05-21T18:26:52.749780"
-  },
-  {
-    "params": {
-      "dirty_ratio": "40",
-      "rmem_max": "1048576",
-      "wmem_max": "212992",
-      "zswap": "Y"
-    },
-    "reward": 18599.540983229024,
-    "rps": 29784.93,
-    "latency": 0.33957,
-    "timestamp": "2025-05-21T18:24:37.082760"
-  },
-  {
-    "params": {
-      "dirty_ratio": "40",
-      "rmem_max": "16777216",
-      "wmem_max": "1048576",
-      "zswap": "Y"
-    },
-    "reward": 17917.45396227778,
-    "rps": 28323.41,
-    "latency": 0.89,
-    "timestamp": "2025-05-21T18:18:27.069974"
+    "reward": 16847.190837659982,
+    "rps": 25589.99,
+    "latency": 0.39262,
+    "timestamp": "2025-05-21T23:43:53.660612"
   },
   {
     "params": {
       "dirty_ratio": "10",
       "rmem_max": "16777216",
-      "wmem_max": "1048576",
-      "zswap": "Y"
+      "wmem_max": "16777216",
+      "zswap": "N"
     },
-    "reward": 16952.955843049313,
-    "rps": 25949.19,
-    "latency": 0.74613,
-    "timestamp": "2025-05-21T18:17:53.012491"
+    "reward": 16821.45168294311,
+    "rps": 25513.76,
+    "latency": 0.41028,
+    "timestamp": "2025-05-21T23:43:19.936004"
   },
   {
     "params": {
       "dirty_ratio": "40",
-      "rmem_max": "1048576",
+      "rmem_max": "16777216",
+      "wmem_max": "16777216",
+      "zswap": "N"
+    },
+    "reward": 16735.195232170885,
+    "rps": 25315.69,
+    "latency": 0.39212,
+    "timestamp": "2025-05-21T23:41:40.733173"
+  },
+  {
+    "params": {
+      "dirty_ratio": "40",
+      "rmem_max": "212992",
       "wmem_max": "1048576",
+      "zswap": "N"
+    },
+    "reward": 15433.577887519132,
+    "rps": 22473.11,
+    "latency": 0.43877999999999995,
+    "timestamp": "2025-05-21T23:41:07.084564"
+  },
+  {
+    "params": {
+      "dirty_ratio": "10",
+      "rmem_max": "1048576",
+      "wmem_max": "16777216",
       "zswap": "Y"
     },
-    "reward": 16843.33220266118,
-    "rps": 25570.9,
-    "latency": 0.42831,
-    "timestamp": "2025-05-21T18:15:37.373883"
+    "reward": 15158.256277007773,
+    "rps": 21924.62,
+    "latency": 0.52779,
+    "timestamp": "2025-05-21T23:05:04.152198"
   }
 ]

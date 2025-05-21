@@ -155,7 +155,14 @@ def train_agent(num_episodes=100, nb_steps_per_episode=10):
         print("List of rewards:", rewards)
         agent.save_q_table(qtable_path)
 
-        window = min(10, len(rewards))
+        plots_dir = "Second Scenario - Server/plots"
+        os.makedirs(plots_dir, exist_ok=True)
+
+        existing = [int(f.split("_")[1].split(".")[0]) for f in os.listdir(plots_dir) if f.startswith("plot_") and f.endswith(".png")]
+        next_num = max(existing) + 1 if existing else 1
+        plot_path = os.path.join(plots_dir, f"plot_{next_num}.png")
+
+        window = min(10, len(rewards))  # Défini AVANT le test
         plt.figure(figsize=(10,5))
         plt.plot(range(1, len(rewards)+1), rewards, label="Reward per episode", alpha=0.7)
         if len(rewards) >= window:
@@ -167,7 +174,9 @@ def train_agent(num_episodes=100, nb_steps_per_episode=10):
         plt.legend()
         plt.grid()
         plt.tight_layout()
+        plt.savefig(plot_path)
         plt.show()
+        print(f"Plot saved as {plot_path}")
 
         print("\nBest configurations validation:")
         for config in best_configs:
