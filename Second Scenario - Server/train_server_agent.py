@@ -155,7 +155,7 @@ def train_agent(num_episodes=30, nb_steps_per_episode=10):
                 )
                 best_configs.append(config)
                 best_configs = sorted(best_configs, key=lambda x: x.reward, reverse=True)[:5]
-                with open('best_configs.json', 'w') as f:
+                with open('Second Scenario - Server/best_configs.json', 'w') as f:
                     json.dump([c.to_dict() for c in best_configs], f, indent=2)
 
             agent.exploration_rate = max(0.05, agent.exploration_rate * agent.exploration_decay)
