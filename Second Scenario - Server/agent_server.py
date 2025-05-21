@@ -1,6 +1,7 @@
 import numpy as np
 import psutil
 import os
+import time
 
 class ServerAgent:
     def __init__(self):
@@ -39,7 +40,9 @@ class ServerAgent:
         self.learning_rate = 0.1
         self.discount_factor = 0.9
         self.exploration_rate = 1.0
-        self.exploration_decay = 0.995
+        self.exploration_decay = 0.998  # 0.995
+
+        self.last_action_time = {}
 
     def get_state(self, metrics):
         """
@@ -48,6 +51,8 @@ class ServerAgent:
         state = []
         for name in self.metric_names:
             value = metrics.get(name, 0.0)
+            if value is None:
+                value = 0.0
             if name == "requests_per_sec":
                 norm = min(value / 100000, 1.0)  
             else:
@@ -92,7 +97,14 @@ class ServerAgent:
         Apply the selected action to the system.
         """
         action = self.actions[action_idx]
-        print(f"Applying action: {action}")
+        current_time = time.time()
+        
+        if action in self.last_action_time:
+            time_since_last = current_time - self.last_action_time[action]
+            if time_since_last < 5: 
+                return False
+    
+        self.last_action_time[action] = current_time
         if action == "no_op":
             pass
         elif action == "set_dirty_ratio_10":
@@ -113,30 +125,66 @@ class ServerAgent:
             os.system("sudo sh -c 'echo 1 > /sys/module/zswap/parameters/enabled'")
         elif action == "disable_zswap":
             os.system("sudo sh -c 'echo 0 > /sys/module/zswap/parameters/enabled'")
-        else:
-            print(f"Unknown action: {action}")
+        return True
 
-    def compute_reward(self, metrics, alpha=100.0, beta=10.0, gamma=1e-5, delta=1e-5, debug=False):
+    def compute_reward(self, metrics, latency=None, p99=None, debug=False):
         """
-        Compute the reward from system metrics.
+        Compute the reward based on system metrics and latency.
         """
         rps = metrics.get("requests_per_sec", 0)
         iowait = metrics.get("iowait", 0)
         cpu = metrics.get("cpu_usage", 0)
         ctx_switches = metrics.get("ctx_switches", 0)
         interrupts = metrics.get("interrupts", 0)
+
+        rps_reward = rps
+        if latency is not None:
+            latency_factor = max(0, 1 - (latency / 100)) 
+            rps_reward *= latency_factor
+        
+        cpu_penalty = np.exp(cpu - 80) * 10 if cpu > 80 else cpu * 0.5 
+
+        io_penalty = iowait * (100 if iowait > 5 else 10)
+
+        ctx_penalty = np.log1p(ctx_switches) * 0.001
+
+        int_penalty = np.log1p(interrupts) * 0.001
+
         reward = (
-            rps
-            - alpha * iowait
-            - beta * cpu
-            - gamma * ctx_switches
-            - delta * interrupts
+            rps_reward
+            - cpu_penalty 
+            - io_penalty
+            - ctx_penalty 
+            - int_penalty
         )
+
         if debug:
-            print(f"[Reward debug] RPS={rps:.2f} | IOwait={iowait:.2f} | CPU={cpu:.2f} | ctx_switches={ctx_switches:.2f} | interrupts={interrupts:.2f}")
-            print(f"[Reward debug] -alpha*iowait={-alpha*iowait:.2f} | -beta*cpu={-beta*cpu:.2f} | -gamma*ctx_switches={-gamma*ctx_switches:.2f} | -delta*interrupts={-delta*interrupts:.2f}")
-            print(f"[Reward debug] Reward total = {reward:.2f}")
+            print("\n=== Reward Calculation Details ===")
+            print(f"Base RPS: {rps:.2f}")
+            if latency is not None:
+                print(f"Latency factor: {latency_factor:.2f}")
+                print(f"Adjusted RPS reward: {rps_reward:.2f}")
+            print(f"CPU penalty: {cpu_penalty:.2f} (usage: {cpu}%)")
+            print(f"IO penalty: {io_penalty:.2f} (iowait: {iowait}%)")
+            print(f"Context switches penalty: {ctx_penalty:.2f}")
+            print(f"Interrupts penalty: {int_penalty:.2f}")
+            print(f"Final reward: {reward:.2f}")
+            print("==============================\n")
+
         return reward
+
+    def penalize_consecutive_actions(self, current_action, previous_actions, window=3):
+        """
+        Apply a penalty for consecutive actions that are the same.
+        """
+        if len(previous_actions) < window:
+            return 1.0
+        
+        recent_actions = previous_actions[-window:]
+        if all(a == current_action for a in recent_actions):
+            return 0.2 
+        
+        return 1.0
 
     def save_q_table(self, path):
         """

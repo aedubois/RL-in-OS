@@ -5,6 +5,27 @@ from agent_server import ServerAgent
 from load_generator import run_wrk
 import numpy as np
 import matplotlib.pyplot as plt
+from dataclasses import dataclass
+from typing import Dict
+import json
+from datetime import datetime
+
+@dataclass
+class Configuration:
+    params: Dict
+    reward: float
+    rps: float
+    latency: float
+    timestamp: str
+
+    def to_dict(self):
+        return {
+            "params": self.params,
+            "reward": self.reward,
+            "rps": self.rps,
+            "latency": self.latency,
+            "timestamp": self.timestamp
+        }
 
 def collect_metrics(requests_per_sec):
     """
@@ -15,7 +36,7 @@ def collect_metrics(requests_per_sec):
     interrupts = psutil.cpu_stats().interrupts
     ctx_switches = psutil.cpu_stats().ctx_switches
     net = psutil.net_io_counters()
-    net_usage = (net.bytes_sent + net.bytes_recv) / 1e6  # MB
+    net_usage = (net.bytes_sent + net.bytes_recv) / 1e6
     return {
         "cpu_usage": cpu,
         "iowait": iowait,
@@ -36,7 +57,34 @@ def reset_sys_params():
     os.system("sudo renice 0 -p $(pgrep nginx)")
     os.system("sudo truncate -s 0 /var/log/nginx/access.log")
 
-def train_agent(num_episodes=500, nb_steps_per_episode=10):
+def get_current_params():
+    dirty_ratio = os.popen("sysctl vm.dirty_ratio").read().split("=")[1].strip()
+    rmem = os.popen("sysctl net.core.rmem_max").read().split("=")[1].strip()
+    wmem = os.popen("sysctl net.core.wmem_max").read().split("=")[1].strip()
+    zswap = os.popen("cat /sys/module/zswap/parameters/enabled").read().strip()
+    return {
+        "dirty_ratio": dirty_ratio,
+        "rmem_max": rmem,
+        "wmem_max": wmem,
+        "zswap": zswap
+    }
+
+def validate_configuration(config_params, agent):
+    for param, value in config_params.items():
+        if param == "dirty_ratio":
+            os.system(f"sudo sysctl -w vm.dirty_ratio={value}")
+        elif param == "rmem_max":
+            os.system(f"sudo sysctl -w net.core.rmem_max={value}")
+        elif param == "wmem_max":
+            os.system(f"sudo sysctl -w net.core.wmem_max={value}")
+        elif param == "zswap":
+            os.system(f"sudo sh -c 'echo {value} > /sys/module/zswap/parameters/enabled'")
+    rps, latency, p99, _ = run_wrk(duration=10)
+    metrics = collect_metrics(rps)
+    reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+    return reward, rps, latency
+
+def train_agent(num_episodes=30, nb_steps_per_episode=10):
     """
     Train the ServerAgent using Q-learning over multiple episodes.
     """
@@ -45,48 +93,87 @@ def train_agent(num_episodes=500, nb_steps_per_episode=10):
     if os.path.exists(qtable_path):
         agent.load_q_table(qtable_path)
     rewards = []
+    previous_actions = []
+    best_configs = []
+    best_reward = float('-inf')
 
-    for episode in range(num_episodes):
+    try:
+        for episode in range(num_episodes):
+            print(f"\n=== Episode {episode+1} / {num_episodes} ===")
+            reset_sys_params()
+            requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+            state = agent.get_state(collect_metrics(requests_per_sec))
+            total_reward = 0
+
+            for step in range(nb_steps_per_episode):
+                action_idx = agent.select_action(state)
+                max_attempts = 3
+                for _ in range(max_attempts):
+                    if agent.apply_action(action_idx):
+                        break
+                    action_idx = agent.select_action(state)
+                else:
+                    continue
+
+                requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+                next_state = agent.get_state(collect_metrics(requests_per_sec))
+                metrics = collect_metrics(requests_per_sec)
+                reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+                penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+                reward *= penalty_factor
+                previous_actions.append(action_idx)
+                agent.learn(state, action_idx, reward, next_state)
+                state = next_state
+                total_reward += reward
+
+            requests_per_sec, latency, p99, _ = run_wrk(duration=5)
+            metrics = collect_metrics(requests_per_sec)
+            reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+            agent.learn(state, action_idx, reward, state)
+            rewards.append(reward)
+
+            if reward > best_reward:
+                best_reward = reward
+                config = Configuration(
+                    params=get_current_params(),
+                    reward=reward,
+                    rps=requests_per_sec,
+                    latency=latency,
+                    timestamp=datetime.now().isoformat()
+                )
+                best_configs.append(config)
+                best_configs = sorted(best_configs, key=lambda x: x.reward, reverse=True)[:5]
+                with open('best_configs.json', 'w') as f:
+                    json.dump([c.to_dict() for c in best_configs], f, indent=2)
+
+            agent.exploration_rate = max(0.05, agent.exploration_rate * agent.exploration_decay)
+            time.sleep(1)
+
+        agent.save_q_table(qtable_path)
+
+        window = min(10, len(rewards))
+        if len(rewards) >= 2:
+            moving_avg = np.convolve(rewards, np.ones(window)/window, mode='valid')
+            plt.figure(figsize=(10,5))
+            plt.plot(range(window, window + len(moving_avg)), moving_avg, label=f"Moving average ({window})")
+            plt.xlabel("Episode")
+            plt.ylabel("Reward")
+            plt.title("Moving average of reward")
+            plt.legend()
+            plt.grid()
+            plt.tight_layout()
+            plt.show()
+
+        print("\nBest configurations validation:")
+        for config in best_configs:
+            print(f"\nTesting configuration: {config.params}")
+            reward, rps, latency = validate_configuration(config.params, agent)
+            print(f"Validation - RPS: {rps:.2f}, Latency: {latency:.2f}ms, Reward: {reward:.2f}")
+    except KeyboardInterrupt:
+        print("\nKeyboard interrupt detected. Saving Q-table and cleaning up...")
+        agent.save_q_table(qtable_path)
         reset_sys_params()
-        requests_per_sec, _ = run_wrk(duration=2)  
-        state = agent.get_state(collect_metrics(requests_per_sec))
-        total_reward = 0
-
-        for step in range(nb_steps_per_episode):
-            action_idx = agent.select_action(state)
-            agent.apply_action(action_idx)
-            
-            requests_per_sec, _ = run_wrk(duration=2)
-            next_state = agent.get_state(collect_metrics(requests_per_sec))
-            
-            reward = agent.compute_reward(collect_metrics(requests_per_sec))
-            
-            agent.learn(state, action_idx, reward, next_state)
-            state = next_state
-            total_reward += reward
-
-        requests_per_sec, _ = run_wrk(duration=5)
-        metrics = collect_metrics(requests_per_sec)
-        reward = agent.compute_reward(metrics, debug=True)
-        agent.learn(state, action_idx, reward, state)
-        rewards.append(reward)
-        agent.exploration_rate = max(0.05, agent.exploration_rate * agent.exploration_decay)
-        time.sleep(1)
-
-    agent.save_q_table(qtable_path)
-
-    window = min(10, len(rewards))
-    if len(rewards) >= 2:
-        moving_avg = np.convolve(rewards, np.ones(window)/window, mode='valid')
-        plt.figure(figsize=(10,5))
-        plt.plot(range(window, window + len(moving_avg)), moving_avg, label=f"Moving average ({window})")
-        plt.xlabel("Episode")
-        plt.ylabel("Reward")
-        plt.title("Moving average of reward")
-        plt.legend()
-        plt.grid()
-        plt.tight_layout()
-        plt.show()
+        print("Q-table saved. System parameters reset. Exiting.")
 
 if __name__ == "__main__":
     train_agent()
