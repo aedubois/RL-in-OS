@@ -40,10 +40,9 @@ class ServerAgent:
         self.learning_rate = 0.1
         self.discount_factor = 0.9
         self.exploration_rate = 1.0
-        self.exploration_decay = 0.998  # 0.995
+        self.exploration_decay = 0.995
 
         self.last_action_time = {}
-        self.action_cost = {i: 0.0 for i in range(len(self.actions))}
 
     def get_state(self, metrics):
         """
@@ -138,7 +137,6 @@ class ServerAgent:
         ctx_switches = metrics.get("ctx_switches", 0)
         interrupts = metrics.get("interrupts", 0)
 
-        # Soft cap on RPS
         rps_reward = rps / (1 + rps / 50000)
 
         if latency is not None:
@@ -186,10 +184,6 @@ class ServerAgent:
             return 0.2 
         
         return 1.0
-
-    def decay_action_cost(self, decay=0.1):
-        for k in self.action_cost:
-            self.action_cost[k] = max(0.0, self.action_cost[k] - decay)
 
     def save_q_table(self, path):
         """

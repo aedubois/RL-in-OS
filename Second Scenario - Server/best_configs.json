@@ -1,14 +1,62 @@
 [
   {
     "params": {
-      "dirty_ratio": "10",
-      "rmem_max": "16777216",
-      "wmem_max": "16777216",
+      "dirty_ratio": "40",
+      "rmem_max": "1048576",
+      "wmem_max": "1048576",
       "zswap": "N"
     },
-    "reward": 36976.2117635447,
-    "rps": 142412.46,
-    "latency": 0.07884999999999999,
-    "timestamp": "2025-05-21T13:25:58.682758"
+    "reward": 18915.60022912151,
+    "rps": 30780.31,
+    "latency": 0.66884,
+    "timestamp": "2025-05-21T18:26:52.749780"
+  },
+  {
+    "params": {
+      "dirty_ratio": "40",
+      "rmem_max": "1048576",
+      "wmem_max": "212992",
+      "zswap": "Y"
+    },
+    "reward": 18599.540983229024,
+    "rps": 29784.93,
+    "latency": 0.33957,
+    "timestamp": "2025-05-21T18:24:37.082760"
+  },
+  {
+    "params": {
+      "dirty_ratio": "40",
+      "rmem_max": "16777216",
+      "wmem_max": "1048576",
+      "zswap": "Y"
+    },
+    "reward": 17917.45396227778,
+    "rps": 28323.41,
+    "latency": 0.89,
+    "timestamp": "2025-05-21T18:18:27.069974"
+  },
+  {
+    "params": {
+      "dirty_ratio": "10",
+      "rmem_max": "16777216",
+      "wmem_max": "1048576",
+      "zswap": "Y"
+    },
+    "reward": 16952.955843049313,
+    "rps": 25949.19,
+    "latency": 0.74613,
+    "timestamp": "2025-05-21T18:17:53.012491"
+  },
+  {
+    "params": {
+      "dirty_ratio": "40",
+      "rmem_max": "1048576",
+      "wmem_max": "1048576",
+      "zswap": "Y"
+    },
+    "reward": 16843.33220266118,
+    "rps": 25570.9,
+    "latency": 0.42831,
+    "timestamp": "2025-05-21T18:15:37.373883"
   }
 ]

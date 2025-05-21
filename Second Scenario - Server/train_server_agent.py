@@ -84,7 +84,7 @@ def validate_configuration(config_params, agent):
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     return reward, rps, latency
 
-def train_agent(num_episodes=500, nb_steps_per_episode=10):
+def train_agent(num_episodes=100, nb_steps_per_episode=10):
     """
     Train the ServerAgent using Q-learning over multiple episodes.
     """
@@ -100,12 +100,10 @@ def train_agent(num_episodes=500, nb_steps_per_episode=10):
     try:
         for episode in range(num_episodes):
             print(f"\n=== Episode {episode+1} / {num_episodes} ===")
-            agent.decay_action_cost(decay=0.1)
             reset_sys_params()
             requests_per_sec, latency, p99, _ = run_wrk(duration=2)
             state = agent.get_state(collect_metrics(requests_per_sec))
             total_reward = 0
-            previous_reward = 0 
 
             for step in range(nb_steps_per_episode):
                 action_idx = agent.select_action(state)
@@ -121,16 +119,7 @@ def train_agent(num_episodes=500, nb_steps_per_episode=10):
                 next_state = agent.get_state(collect_metrics(requests_per_sec))
                 metrics = collect_metrics(requests_per_sec)
                 reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-
-                if step > 0:
-                    if reward <= previous_reward:
-                        agent.action_cost[action_idx] += 1.0 
-                    else:
-                        agent.action_cost[action_idx] = max(0.0, agent.action_cost[action_idx] - 0.5)  # Décroissance si amélioration
-                previous_reward = reward
-
-                reward -= agent.action_cost[action_idx]
-
+            
                 penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
                 reward *= penalty_factor
                 previous_actions.append(action_idx)
@@ -143,6 +132,8 @@ def train_agent(num_episodes=500, nb_steps_per_episode=10):
             reward = agent.compute_reward(metrics, latency=latency, p99=p99)
             agent.learn(state, action_idx, reward, state)
             rewards.append(reward)
+
+            print(f"Reward of episode {episode+1} : {reward}") 
 
             if reward > best_reward:
                 best_reward = reward
@@ -161,20 +152,22 @@ def train_agent(num_episodes=500, nb_steps_per_episode=10):
             agent.exploration_rate = max(0.05, agent.exploration_rate * agent.exploration_decay)
             time.sleep(1)
 
+        print("List of rewards:", rewards)
         agent.save_q_table(qtable_path)
 
         window = min(10, len(rewards))
-        if len(rewards) >= 2:
+        plt.figure(figsize=(10,5))
+        plt.plot(range(1, len(rewards)+1), rewards, label="Reward per episode", alpha=0.7)
+        if len(rewards) >= window:
             moving_avg = np.convolve(rewards, np.ones(window)/window, mode='valid')
-            plt.figure(figsize=(10,5))
-            plt.plot(range(window, window + len(moving_avg)), moving_avg, label=f"Moving average ({window})")
-            plt.xlabel("Episode")
-            plt.ylabel("Reward")
-            plt.title("Moving average of reward")
-            plt.legend()
-            plt.grid()
-            plt.tight_layout()
-            plt.show()
+            plt.plot(range(window, window + len(moving_avg)), moving_avg, label=f"Moving average ({window})", linewidth=2)
+        plt.xlabel("Episode")
+        plt.ylabel("Reward")
+        plt.title("Reward per episode and moving average")
+        plt.legend()
+        plt.grid()
+        plt.tight_layout()
+        plt.show()
 
         print("\nBest configurations validation:")
         for config in best_configs:
