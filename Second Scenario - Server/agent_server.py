@@ -43,6 +43,7 @@ class ServerAgent:
         self.exploration_decay = 0.998  # 0.995
 
         self.last_action_time = {}
+        self.action_cost = {i: 0.0 for i in range(len(self.actions))}
 
     def get_state(self, metrics):
         """
@@ -137,17 +138,16 @@ class ServerAgent:
         ctx_switches = metrics.get("ctx_switches", 0)
         interrupts = metrics.get("interrupts", 0)
 
-        rps_reward = rps
+        # Soft cap on RPS
+        rps_reward = rps / (1 + rps / 50000)
+
         if latency is not None:
             latency_factor = max(0, 1 - (latency / 100)) 
             rps_reward *= latency_factor
-        
+
         cpu_penalty = np.exp(cpu - 80) * 10 if cpu > 80 else cpu * 0.5 
-
         io_penalty = iowait * (100 if iowait > 5 else 10)
-
         ctx_penalty = np.log1p(ctx_switches) * 0.001
-
         int_penalty = np.log1p(interrupts) * 0.001
 
         reward = (
@@ -161,6 +161,7 @@ class ServerAgent:
         if debug:
             print("\n=== Reward Calculation Details ===")
             print(f"Base RPS: {rps:.2f}")
+            print(f"Soft capped RPS reward: {rps_reward:.2f}")
             if latency is not None:
                 print(f"Latency factor: {latency_factor:.2f}")
                 print(f"Adjusted RPS reward: {rps_reward:.2f}")
@@ -185,6 +186,10 @@ class ServerAgent:
             return 0.2 
         
         return 1.0
+
+    def decay_action_cost(self, decay=0.1):
+        for k in self.action_cost:
+            self.action_cost[k] = max(0.0, self.action_cost[k] - decay)
 
     def save_q_table(self, path):
         """

@@ -100,10 +100,12 @@ def train_agent(num_episodes=30, nb_steps_per_episode=10):
     try:
         for episode in range(num_episodes):
             print(f"\n=== Episode {episode+1} / {num_episodes} ===")
+            agent.decay_action_cost(decay=0.1)
             reset_sys_params()
             requests_per_sec, latency, p99, _ = run_wrk(duration=2)
             state = agent.get_state(collect_metrics(requests_per_sec))
             total_reward = 0
+            previous_reward = 0 
 
             for step in range(nb_steps_per_episode):
                 action_idx = agent.select_action(state)
@@ -119,6 +121,16 @@ def train_agent(num_episodes=30, nb_steps_per_episode=10):
                 next_state = agent.get_state(collect_metrics(requests_per_sec))
                 metrics = collect_metrics(requests_per_sec)
                 reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+
+                if step > 0:
+                    if reward <= previous_reward:
+                        agent.action_cost[action_idx] += 1.0 
+                    else:
+                        agent.action_cost[action_idx] = max(0.0, agent.action_cost[action_idx] - 0.5)  # Décroissance si amélioration
+                previous_reward = reward
+
+                reward -= agent.action_cost[action_idx]
+
                 penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
                 reward *= penalty_factor
                 previous_actions.append(action_idx)
