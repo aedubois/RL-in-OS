@@ -62,7 +62,7 @@ class EventAgent:
         q_table_shape = tuple(len(bins) - 1 for bins in self.bins.values()) + (len(self.actions),)
         if os.path.exists("First Scenario - Desktop/q_table.npy"):
             self.q_table = np.load("First Scenario - Desktop/q_table.npy")
-            print("Q-Table loaded from q_table.npy.")
+            print("Q-Table loaded from  First Scenario - Desktop/q_table.npy")
         else:
             self.q_table = np.zeros(q_table_shape)
             print("Initialized new Q-Table.")
