@@ -110,7 +110,7 @@ def train_agent(num_episodes=5000, learning_rate=0.1, discount_factor=0.9, explo
         print("\nTraining interrupted by user.")
 
     agent.clean_resources()
-    agent.save_q_table("q_table.npy")
+    agent.save_q_table("First Scenario - Desktop/q_table.npy")
 
 if __name__ == "__main__":
     train_agent()
