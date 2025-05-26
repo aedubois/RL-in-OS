@@ -84,7 +84,7 @@ def validate_configuration(config_params, agent):
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     return reward, rps, latency
 
-def train_agent(num_episodes=100, nb_steps_per_episode=10):
+def train_agent(num_episodes=1000, nb_steps_per_episode=10):
     """
     Train the ServerAgent using Q-learning over multiple episodes.
     """
