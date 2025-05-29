@@ -5,6 +5,7 @@ import random
 
 class IoTAgent:
     def __init__(self):
+        """Initialize the IoT agent with Q-learning parameters and state space."""
         self.actions = [
             "set_cpu_powersave",
             "set_cpu_ondemand",
@@ -51,6 +52,7 @@ class IoTAgent:
         self.sleep_mode_steps = 0
 
     def reset(self):
+        """Reset the simulated environment to initial state."""
         self.sim_cpu_freq = 2.0
         self.sim_temperature = 40.0
         self.sim_battery = 100.0
@@ -61,6 +63,7 @@ class IoTAgent:
         return self.get_state()
 
     def get_state(self):
+        """Get the current state of the simulated IoT device."""
         return {
             "cpu_freq": self.sim_cpu_freq,
             "temperature": self.sim_temperature,
@@ -71,6 +74,7 @@ class IoTAgent:
         }
 
     def normalize_state(self, raw_state):
+        """Normalize the raw state into a tuple of indices based on defined bins."""
         normalized = []
         for key in self.metrics:
             value = raw_state[key]
@@ -81,6 +85,7 @@ class IoTAgent:
         return tuple(normalized)
 
     def select_action(self, state_tuple):
+        """Select an action based on the current state using epsilon-greedy policy."""
         if self.sleep_mode_steps > 0:
             return self.actions.index("no_op")
         if np.random.rand() < self.exploration_rate:
@@ -88,6 +93,7 @@ class IoTAgent:
         return np.argmax(self.q_table[state_tuple])
 
     def learn(self, state, action_idx, reward, next_state):
+        """Update the Q-table based on the action taken and the received reward."""
         s = self.normalize_state(state)
         s_prime = self.normalize_state(next_state)
         best_next = np.max(self.q_table[s_prime])
@@ -96,6 +102,7 @@ class IoTAgent:
         self.q_table[s][action_idx] += self.learning_rate * td_error
 
     def apply_action(self, action_idx):
+        """Apply the selected action to the simulated environment."""
         action = self.actions[action_idx]
         print(f"[ACTION] Executed: {action}")
 
@@ -130,11 +137,11 @@ class IoTAgent:
             # no_op does nothing
 
         # Random event: load spike
-        if random.random() < 0.1:
+        if random.random() < 0.05:
             print("[EVENT] Load spike!")
             self.sim_temperature += random.uniform(2, 6)
             self.sim_disk_io += random.randint(int(1e5), int(5e5))
-            self.sim_error_rate = min(1.0, self.sim_error_rate + random.uniform(0.05, 0.2))
+            self.sim_error_rate = min(1.0, self.sim_error_rate + random.uniform(0.05, 0.1))
             self.sim_network_usage += random.randint(int(1e5), int(5e5))
 
         # Natural evolution
@@ -145,6 +152,7 @@ class IoTAgent:
         self.sim_network_usage = max(0, self.sim_network_usage + np.random.randint(-int(1e4), int(5e4)))
 
     def compute_reward(self, state_before, state_after):
+        """Compute the reward based on the change in state metrics."""
         delta_temp = state_after["temperature"] - state_before["temperature"]
         delta_battery = state_after["battery"] - state_before["battery"]
         delta_disk = state_after["disk_write_bytes"] - state_before["disk_write_bytes"]
@@ -159,26 +167,17 @@ class IoTAgent:
             - 10 * delta_error
             - abs(delta_net) / 1e5
         )
+        if state_after["battery"] > 10:
+            reward += 1
         print(f"[REWARD] ΔTemp={delta_temp:.2f}, ΔBattery={delta_battery:.2f}, ΔDiskIO={delta_disk:.0f}, ΔError={delta_error:.3f}, ΔNet={delta_net:.0f} → Reward={reward:.2f}")
         return reward
 
     def save_q_table(self, path="q_table_iot.npy"):
+        """Save the Q-table to a file."""
         np.save(path, self.q_table)
 
     def load_q_table(self, path="q_table_iot.npy"):
+        """Load the Q-table from a file if it exists."""
         if os.path.exists(path):
             self.q_table = np.load(path)
             print("[Q-TABLE] Loaded from file.")
-
-if __name__ == "__main__":
-    agent = IoTAgent()
-    for _ in range(3):
-        state = agent.get_state()
-        state_tuple = agent.normalize_state(state)
-        action = agent.select_action(state_tuple)
-        agent.apply_action(action)
-        time.sleep(2)
-        next_state = agent.get_state()
-        reward = agent.compute_reward(state, next_state)
-        agent.learn(state, action, reward, next_state)
-    agent.save_q_table()

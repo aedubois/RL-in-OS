@@ -4,7 +4,8 @@ from agent_iot import IoTAgent
 import matplotlib.pyplot as plt
 import os
 
-def train_iot_agent(num_episodes=1, sleep_interval=1):
+def train_iot_agent(num_episodes=100, sleep_interval=0.1):
+    """Train the IoT agent using Q-learning."""
     agent = IoTAgent()
     rewards = []
     q_table_path = "Third Scenario - IoT/q_table_iot.npy"
@@ -15,7 +16,7 @@ def train_iot_agent(num_episodes=1, sleep_interval=1):
             state = agent.reset()
             episode_reward = 0
 
-            for step in range(100):  # max steps per episode
+            for step in range(100): 
                 print(f"[STATE] {state}")
                 state_tuple = agent.normalize_state(state)
                 action_idx = agent.select_action(state_tuple)
