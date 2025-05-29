@@ -2,8 +2,9 @@ import time
 import numpy as np
 from agent_iot import IoTAgent
 import matplotlib.pyplot as plt
+import os
 
-def train_iot_agent(num_episodes=150, sleep_interval=1):
+def train_iot_agent(num_episodes=1, sleep_interval=1):
     agent = IoTAgent()
     rewards = []
     q_table_path = "Third Scenario - IoT/q_table_iot.npy"
@@ -39,16 +40,25 @@ def train_iot_agent(num_episodes=150, sleep_interval=1):
             if (episode + 1) % 10 == 0:
                 agent.save_q_table(q_table_path)
 
-        # Plot rewards
-        plt.plot(rewards)
-        plt.xlabel("Episode")
-        plt.ylabel("Total Reward")
-        plt.title("Learning curve")
-        plt.show()
-
     except KeyboardInterrupt:
-        print("Training interrupted.")
+        print("Training interrupted, Q-table will be saved.")
         agent.save_q_table(q_table_path)
+
+    plt.plot(rewards)
+    plt.xlabel("Episode")
+    plt.ylabel("Total Reward")
+    plt.title("Learning curve")
+
+    plots_dir = "Third Scenario - IoT/plots"
+    os.makedirs(plots_dir, exist_ok=True)
+
+    existing = [int(f.split("_")[1].split(".")[0]) for f in os.listdir(plots_dir) if f.startswith("plot_") and f.endswith(".png")]
+    next_num = max(existing) + 1 if existing else 1
+    plot_path = os.path.join(plots_dir, f"plot_{next_num}.png")
+
+    plt.savefig(plot_path)
+    plt.show()
+    print(f"Plot saved as {plot_path}")
 
 if __name__ == "__main__":
     train_iot_agent()

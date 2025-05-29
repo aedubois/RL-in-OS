@@ -162,7 +162,7 @@ def train_agent(num_episodes=1000, nb_steps_per_episode=10):
         next_num = max(existing) + 1 if existing else 1
         plot_path = os.path.join(plots_dir, f"plot_{next_num}.png")
 
-        window = min(10, len(rewards))  # Défini AVANT le test
+        window = min(10, len(rewards)) 
         plt.figure(figsize=(10,5))
         plt.plot(range(1, len(rewards)+1), rewards, label="Reward per episode", alpha=0.7)
         if len(rewards) >= window:
