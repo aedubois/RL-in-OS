@@ -4,7 +4,7 @@ from agent_iot import IoTAgent
 import matplotlib.pyplot as plt
 import os
 
-def train_iot_agent(num_episodes=100, sleep_interval=0.1):
+def main(num_episodes=100, sleep_interval=0.1, return_rewards=False):
     """Train the IoT agent using Q-learning."""
     agent = IoTAgent()
     rewards = []
@@ -45,6 +45,9 @@ def train_iot_agent(num_episodes=100, sleep_interval=0.1):
         print("Training interrupted, Q-table will be saved.")
         agent.save_q_table(q_table_path)
 
+    if return_rewards:
+        return rewards
+
     plt.plot(rewards)
     plt.xlabel("Episode")
     plt.ylabel("Total Reward")
@@ -62,4 +65,4 @@ def train_iot_agent(num_episodes=100, sleep_interval=0.1):
     print(f"Plot saved as {plot_path}")
 
 if __name__ == "__main__":
-    train_iot_agent()
+    main(num_episodes=100, sleep_interval=0.1)
