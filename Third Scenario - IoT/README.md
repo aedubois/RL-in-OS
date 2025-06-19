@@ -14,6 +14,7 @@ Deterministic load spikes are triggered based on specific system states, challen
 
 ## Folder Structure
 
+```
 Third Scenario - IoT/
 │
 ├── agent_iot.py             # IoT RL agent: state, actions, Q-table, reward, simulation logic, load spikes
@@ -28,9 +29,6 @@ Third Scenario - IoT/
 ├── rewards_noop_iot.npy     # (Generated) Rewards for no-op policy
 └── plots/
     └── plot_1.png           # (Generated) Training reward plot(s)
-
-```
-
 ```
 
 ---
