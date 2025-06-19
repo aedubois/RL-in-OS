@@ -154,6 +154,10 @@ Example terminal logs:
 [EVENT] Load spike! (classic)
 ```
 
+Example plot output:
+![image](https://github.com/user-attachments/assets/4135ef8b-3581-4f3e-bcbc-995703708d37)
+
+
 ---
 
 ## Tips
