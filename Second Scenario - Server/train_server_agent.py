@@ -84,10 +84,78 @@ def validate_configuration(config_params, agent):
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     return reward, rps, latency
 
+def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
+    reset_sys_params()
+    requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+    state = agent.get_state(collect_metrics(requests_per_sec))
+    total_reward = 0
+
+    for step in range(nb_steps_per_episode):
+        action_idx = agent.select_action(state)
+        max_attempts = 3
+        for _ in range(max_attempts):
+            if agent.apply_action(action_idx):
+                break
+            action_idx = agent.select_action(state)
+        else:
+            continue
+
+        print(f"Applying action: {agent.actions[action_idx]}")
+        requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+        next_state = agent.get_state(collect_metrics(requests_per_sec))
+        metrics = collect_metrics(requests_per_sec)
+        reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+
+        penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+        reward *= penalty_factor
+        previous_actions.append(action_idx)
+        agent.learn(state, action_idx, reward, next_state)
+        state = next_state
+        total_reward += reward
+        time.sleep(sleep_interval)
+
+    # Final evaluation step
+    requests_per_sec, latency, p99, _ = run_wrk(duration=5)
+    metrics = collect_metrics(requests_per_sec)
+    reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+    agent.learn(state, action_idx, reward, state)
+    return reward, requests_per_sec, latency
+
+def update_best_configs(best_configs, reward, requests_per_sec, latency):
+    config = Configuration(
+        params=get_current_params(),
+        reward=reward,
+        rps=requests_per_sec,
+        latency=latency,
+        timestamp=datetime.now().isoformat()
+    )
+    best_configs.append(config)
+    best_configs = sorted(best_configs, key=lambda x: x.reward, reverse=True)[:5]
+    with open('Second Scenario - Server/best_configs.json', 'w') as f:
+        json.dump([c.to_dict() for c in best_configs], f, indent=2)
+    return best_configs
+
+def plot_rewards(rewards, plots_dir):
+    os.makedirs(plots_dir, exist_ok=True)
+    existing = [int(f.split("_")[1].split(".")[0]) for f in os.listdir(plots_dir) if f.startswith("plot_") and f.endswith(".png")]
+    next_num = max(existing) + 1 if existing else 1
+    plot_path = os.path.join(plots_dir, f"plot_{next_num}.png")
+    window = min(10, len(rewards))
+    plt.figure(figsize=(10,5))
+    plt.plot(range(1, len(rewards)+1), rewards, label="Reward per episode", alpha=0.7)
+    if len(rewards) >= window:
+        moving_avg = np.convolve(rewards, np.ones(window)/window, mode='valid')
+        plt.plot(range(window, window + len(moving_avg)), moving_avg, label=f"Moving average ({window})", linewidth=2)
+    plt.xlabel("Episode")
+    plt.ylabel("Reward")
+    plt.title("Reward per episode and moving average")
+    plt.legend()
+    plt.grid()
+    plt.tight_layout()
+    plt.savefig(plot_path)
+    print(f"Plot saved as {plot_path}")
+
 def train_agent(num_episodes=100, nb_steps_per_episode=10, sleep_interval=1, return_rewards=False, exploration_rate=1.0):
-    """
-    Train the ServerAgent using Q-learning over multiple episodes.
-    """
     agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
     rewards_dir = "Second Scenario - Server/rewards"
@@ -103,84 +171,20 @@ def train_agent(num_episodes=100, nb_steps_per_episode=10, sleep_interval=1, ret
     try:
         for episode in range(num_episodes):
             print(f"\n=== Episode {episode+1} / {num_episodes} ===")
-            reset_sys_params()
-            requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-            state = agent.get_state(collect_metrics(requests_per_sec))
-            total_reward = 0
-
-            for step in range(nb_steps_per_episode):
-                action_idx = agent.select_action(state)
-                max_attempts = 3
-                for _ in range(max_attempts):
-                    if agent.apply_action(action_idx):
-                        break
-                    action_idx = agent.select_action(state)
-                else:
-                    continue
-                
-                print(f"Applying action: {agent.actions[action_idx]}")
-                requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-                next_state = agent.get_state(collect_metrics(requests_per_sec))
-                metrics = collect_metrics(requests_per_sec)
-                reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-            
-                penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-                reward *= penalty_factor
-                previous_actions.append(action_idx)
-                agent.learn(state, action_idx, reward, next_state)
-                state = next_state
-                total_reward += reward
-
-            requests_per_sec, latency, p99, _ = run_wrk(duration=5)
-            metrics = collect_metrics(requests_per_sec)
-            reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-            agent.learn(state, action_idx, reward, state)
+            reward, requests_per_sec, latency = run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions)
             rewards.append(reward)
-
-            print(f"Reward of episode {episode+1} : {reward}") 
+            print(f"Reward of episode {episode+1} : {reward}")
 
             if reward > best_reward:
                 best_reward = reward
-                config = Configuration(
-                    params=get_current_params(),
-                    reward=reward,
-                    rps=requests_per_sec,
-                    latency=latency,
-                    timestamp=datetime.now().isoformat()
-                )
-                best_configs.append(config)
-                best_configs = sorted(best_configs, key=lambda x: x.reward, reverse=True)[:5]
-                with open('Second Scenario - Server/best_configs.json', 'w') as f:
-                    json.dump([c.to_dict() for c in best_configs], f, indent=2)
+                best_configs = update_best_configs(best_configs, reward, requests_per_sec, latency)
 
             agent.exploration_rate = max(0.05, agent.exploration_rate * agent.exploration_decay)
-            time.sleep(sleep_interval)
 
         agent.save_q_table(qtable_path)
-
         np.save(rewards_path, np.array(rewards))
-
         plots_dir = "Second Scenario - Server/plots"
-        os.makedirs(plots_dir, exist_ok=True)
-
-        existing = [int(f.split("_")[1].split(".")[0]) for f in os.listdir(plots_dir) if f.startswith("plot_") and f.endswith(".png")]
-        next_num = max(existing) + 1 if existing else 1
-        plot_path = os.path.join(plots_dir, f"plot_{next_num}.png")
-
-        window = min(10, len(rewards)) 
-        plt.figure(figsize=(10,5))
-        plt.plot(range(1, len(rewards)+1), rewards, label="Reward per episode", alpha=0.7)
-        if len(rewards) >= window:
-            moving_avg = np.convolve(rewards, np.ones(window)/window, mode='valid')
-            plt.plot(range(window, window + len(moving_avg)), moving_avg, label=f"Moving average ({window})", linewidth=2)
-        plt.xlabel("Episode")
-        plt.ylabel("Reward")
-        plt.title("Reward per episode and moving average")
-        plt.legend()
-        plt.grid()
-        plt.tight_layout()
-        plt.savefig(plot_path)
-        print(f"Plot saved as {plot_path}")
+        plot_rewards(rewards, plots_dir)
 
         print("\nBest configurations validation:")
         for config in best_configs:
@@ -189,7 +193,7 @@ def train_agent(num_episodes=100, nb_steps_per_episode=10, sleep_interval=1, ret
             print(f"Validation - RPS: {rps:.2f}, Latency: {latency:.2f}ms, Reward: {reward:.2f}")
         if return_rewards:
             return rewards
-    
+
     except KeyboardInterrupt:
         print("\nKeyboard interrupt detected. Saving Q-table and cleaning up...")
         agent.save_q_table(qtable_path)

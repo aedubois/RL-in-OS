@@ -143,8 +143,9 @@ class ServerAgent:
             latency_factor = max(0, 1 - (latency / 100)) 
             rps_reward *= latency_factor
 
-        cpu_penalty = np.exp(cpu - 80) * 10 if cpu > 80 else cpu * 0.5 
-        io_penalty = iowait * (100 if iowait > 5 else 10)
+        # Pénalités plus douces
+        cpu_penalty = np.exp(cpu - 90) * 5 if cpu > 90 else cpu * 0.5 
+        io_penalty = iowait * (50 if iowait > 5 else 10)
         ctx_penalty = np.log1p(ctx_switches) * 0.001
         int_penalty = np.log1p(interrupts) * 0.001
 
@@ -155,6 +156,8 @@ class ServerAgent:
             - ctx_penalty 
             - int_penalty
         )
+
+        reward = np.clip(reward, -10000, 10000)
 
         if debug:
             print("\n=== Reward Calculation Details ===")
