@@ -22,7 +22,7 @@ def main(num_episodes=100, sleep_interval=0.1, return_rewards=False):
                 action_idx = agent.select_action(state_tuple)
                 agent.apply_action(action_idx)
                 next_state = agent.get_state()
-                reward = agent.compute_reward(state, next_state)
+                reward = agent.compute_reward(state, next_state, action_idx)
                 agent.learn(state, action_idx, reward, next_state)
                 episode_reward += reward
                 state = next_state

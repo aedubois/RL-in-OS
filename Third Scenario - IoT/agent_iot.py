@@ -101,6 +101,44 @@ class IoTAgent:
         td_error = td_target - self.q_table[s][action_idx]
         self.q_table[s][action_idx] += self.learning_rate * td_error
 
+    def load_spikes(self):
+        """Simulate load spikes based on specific conditions."""
+        if (
+            self.sim_temperature > 42
+            and self.sim_cpu_freq > 1.8
+            and self.sim_network_usage > 400000
+            and self.sim_error_rate < 0.02
+        ):
+            print("[EVENT] Load spike! (classic)")
+            intensity = 1.0
+            self.sim_temperature += random.uniform(4, 8) * intensity
+            self.sim_disk_io += random.randint(int(1e5), int(5e5)) * intensity
+            self.sim_error_rate = min(1.0, self.sim_error_rate + random.uniform(0.05, 0.15) * intensity)
+            self.sim_network_usage += random.randint(int(1e5), int(5e5)) * intensity
+
+        if (
+            self.sim_battery > 95
+            and self.sim_disk_io < 1e5
+            and self.sim_cpu_freq < 1.3
+        ):
+            print("[EVENT] Load spike! (high battery, calm system)")
+            intensity = 1.5
+            self.sim_temperature += random.uniform(4, 8) * intensity
+            self.sim_disk_io += random.randint(int(1e5), int(5e5)) * intensity
+            self.sim_error_rate = min(1.0, self.sim_error_rate + random.uniform(0.05, 0.15) * intensity)
+            self.sim_network_usage += random.randint(int(1e5), int(5e5)) * intensity
+
+        if (
+            self.sim_network_usage < 100000
+            and 38 < self.sim_temperature < 45
+        ):
+            print("[EVENT] Load spike! (low net, moderate temp)")
+            intensity = 0.7
+            self.sim_temperature += random.uniform(4, 8) * intensity
+            self.sim_disk_io += random.randint(int(1e5), int(5e5)) * intensity
+            self.sim_error_rate = min(1.0, self.sim_error_rate + random.uniform(0.05, 0.15) * intensity)
+            self.sim_network_usage += random.randint(int(1e5), int(5e5)) * intensity
+
     def apply_action(self, action_idx):
         """Apply the selected action to the simulated environment."""
         action = self.actions[action_idx]
@@ -136,40 +174,95 @@ class IoTAgent:
                 self.sim_error_rate = max(0, self.sim_error_rate - 0.01)
             # no_op does nothing
 
-        # Random event: load spike
-        if random.random() < 0.05:
-            print("[EVENT] Load spike!")
-            self.sim_temperature += random.uniform(2, 6)
-            self.sim_disk_io += random.randint(int(1e5), int(5e5))
-            self.sim_error_rate = min(1.0, self.sim_error_rate + random.uniform(0.05, 0.1))
-            self.sim_network_usage += random.randint(int(1e5), int(5e5))
+        # Simulate load spikes after action
+        self.load_spikes() 
 
         # Natural evolution
-        self.sim_temperature += np.random.uniform(-0.5, 1.0)
-        self.sim_battery = max(0, self.sim_battery - np.random.uniform(0.1, 0.5))
+        self.sim_temperature += np.random.uniform(-0.2, 1.5) 
+        self.sim_battery = max(0, self.sim_battery - np.random.uniform(0.3, 1.0))  
         self.sim_disk_io += np.random.randint(int(1e4), int(1e5))
         self.sim_error_rate = min(1.0, max(0, self.sim_error_rate + np.random.uniform(-0.01, 0.02)))
         self.sim_network_usage = max(0, self.sim_network_usage + np.random.randint(-int(1e4), int(5e4)))
 
-    def compute_reward(self, state_before, state_after):
-        """Compute the reward based on the change in state metrics."""
+    def compute_reward(self, state_before, state_after, action=None):
+        """Hybrid reward: combines delta and absolute state penalties/bonuses."""
         delta_temp = state_after["temperature"] - state_before["temperature"]
         delta_battery = state_after["battery"] - state_before["battery"]
-        delta_disk = state_after["disk_write_bytes"] - state_before["disk_write_bytes"]
+        delta_diskio = state_after["disk_write_bytes"] - state_before["disk_write_bytes"]
         delta_error = state_after["error_rate"] - state_before["error_rate"]
         delta_net = state_after["network_usage"] - state_before["network_usage"]
 
-        # Reward: encourage low temp, high battery, low disk I/O, low error, low network usage
-        reward = (
-            -delta_temp
-            + delta_battery / 2
-            - abs(delta_disk) / 1e6
-            - 10 * delta_error
-            - abs(delta_net) / 1e5
-        )
-        if state_after["battery"] > 10:
-            reward += 1
-        print(f"[REWARD] ΔTemp={delta_temp:.2f}, ΔBattery={delta_battery:.2f}, ΔDiskIO={delta_disk:.0f}, ΔError={delta_error:.3f}, ΔNet={delta_net:.0f} → Reward={reward:.2f}")
+        # --- DELTA PART (variation-based, discriminant) ---
+        reward = 0
+
+        # TEMP
+        if delta_temp > 1.5:
+            reward -= 1.5 * (delta_temp ** 2)
+        elif delta_temp < -1.0:
+            reward += 1.2 * abs(delta_temp)
+
+        # BATTERY
+        if delta_battery < -0.6:
+            reward -= 5 * abs(delta_battery)
+        else:
+            reward += 2 * delta_battery
+
+        # ERROR RATE
+        if delta_error > 0.01:
+            reward -= 300 * delta_error
+        elif delta_error < -0.005:
+            reward += 100 * abs(delta_error)
+
+        # NETWORK
+        if delta_net > 20000 and delta_temp < 1 and delta_error < 0.005:
+            reward += 0.002 * delta_net
+        elif delta_net > 20000:
+            reward -= 0.001 * delta_net
+
+        # DISK I/O
+        if delta_diskio < -100000 and delta_error > 0.005:
+            reward -= 0.001 * abs(delta_diskio)
+        elif delta_diskio < 0:
+            reward += 0.0005 * abs(delta_diskio)
+
+        # SYNERGY BONUS
+        if delta_temp < 0 and delta_battery > 0 and delta_error < 0 and delta_net < 0:
+            reward += 5
+
+        # --- ABSOLUTE PART (state-based, safety/bonus) ---
+        temp = state_after["temperature"]
+        battery = state_after["battery"]
+        diskio = state_after["disk_write_bytes"]
+        error = state_after["error_rate"]
+        net = state_after["network_usage"]
+
+        # Strong penalty if temperature is critical
+        if temp > 70:
+            reward -= 50
+        elif temp < 45:
+            reward += 10
+
+        # Battery thresholds
+        if battery < 10:
+            reward -= 20
+        elif battery > 50:
+            reward += 5
+
+        # Disk I/O low bonus
+        if abs(diskio) < 1e5:
+            reward += 2
+
+        # Error rate penalty
+        if error > 0.2:
+            reward -= 10
+
+        # Penalize powersave if not needed
+        if action is not None and action == "set_cpu_powersave":
+            if state_after["temperature"] < 40 and state_after["cpu_freq"] < 1.2:
+                reward -= 20 
+
+        print(f"[REWARD] ΔTemp={delta_temp:.2f}, ΔBattery={delta_battery:.2f}, ΔDiskIO={delta_diskio:.0f}, ΔError={delta_error:.3f}, ΔNet={delta_net:.0f} | "
+              f"Temp={temp:.1f}, Battery={battery:.1f}, Error={error:.3f} → Reward={reward:.2f}")
         return reward
 
     def save_q_table(self, path="q_table_iot.npy"):

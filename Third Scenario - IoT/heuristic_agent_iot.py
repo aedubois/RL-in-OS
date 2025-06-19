@@ -5,16 +5,17 @@ import matplotlib.pyplot as plt
 import os
 
 def heuristic_policy(state):
-    """A simple heuristic policy based on system state."""
-    if state["temperature"] > 60:
-        return "set_cpu_powersave"
-    if state["battery"] < 20:
+    """A simple heuristic policy for the IoT agent."""
+    if state["battery"] < 10:
         return "enable_sleep_mode"
-    if state["disk_write_bytes"] > 5e6:
+    elif state["temperature"] > 65:
+        return "set_cpu_powersave"
+    elif state["disk_write_bytes"] > 8e6:
         return "reduce_writeback_interval"
-    if state["error_rate"] > 0.5:
+    elif state["error_rate"] > 0.3:
         return "reduce_screen_brightness"
-    return "no_op"
+    else:
+        return "no_op"
 
 def main(num_episodes=100, sleep_interval=0.1, return_rewards=False):
     """Run a heuristic policy for the IoT agent."""
@@ -31,7 +32,7 @@ def main(num_episodes=100, sleep_interval=0.1, return_rewards=False):
             action_idx = agent.actions.index(action_name)
             agent.apply_action(action_idx)
             next_state = agent.get_state()
-            reward = agent.compute_reward(state, next_state)
+            reward = agent.compute_reward(state, next_state, action_idx)
             episode_reward += reward
             state = next_state
 
