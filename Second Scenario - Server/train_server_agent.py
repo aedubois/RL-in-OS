@@ -84,12 +84,15 @@ def validate_configuration(config_params, agent):
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     return reward, rps, latency
 
-def train_agent(num_episodes=1000, nb_steps_per_episode=10):
+def train_agent(num_episodes=100, nb_steps_per_episode=10, sleep_interval=1, return_rewards=False, exploration_rate=1.0):
     """
     Train the ServerAgent using Q-learning over multiple episodes.
     """
-    agent = ServerAgent()
+    agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
+    rewards_dir = "Second Scenario - Server/rewards"
+    os.makedirs(rewards_dir, exist_ok=True)
+    rewards_path = os.path.join(rewards_dir, "rewards_rl_server.npy")
     if os.path.exists(qtable_path):
         agent.load_q_table(qtable_path)
     rewards = []
@@ -114,7 +117,8 @@ def train_agent(num_episodes=1000, nb_steps_per_episode=10):
                     action_idx = agent.select_action(state)
                 else:
                     continue
-
+                
+                print(f"Applying action: {agent.actions[action_idx]}")
                 requests_per_sec, latency, p99, _ = run_wrk(duration=2)
                 next_state = agent.get_state(collect_metrics(requests_per_sec))
                 metrics = collect_metrics(requests_per_sec)
@@ -150,10 +154,11 @@ def train_agent(num_episodes=1000, nb_steps_per_episode=10):
                     json.dump([c.to_dict() for c in best_configs], f, indent=2)
 
             agent.exploration_rate = max(0.05, agent.exploration_rate * agent.exploration_decay)
-            time.sleep(1)
+            time.sleep(sleep_interval)
 
-        print("List of rewards:", rewards)
         agent.save_q_table(qtable_path)
+
+        np.save(rewards_path, np.array(rewards))
 
         plots_dir = "Second Scenario - Server/plots"
         os.makedirs(plots_dir, exist_ok=True)
@@ -175,7 +180,6 @@ def train_agent(num_episodes=1000, nb_steps_per_episode=10):
         plt.grid()
         plt.tight_layout()
         plt.savefig(plot_path)
-        plt.show()
         print(f"Plot saved as {plot_path}")
 
         print("\nBest configurations validation:")
@@ -183,6 +187,9 @@ def train_agent(num_episodes=1000, nb_steps_per_episode=10):
             print(f"\nTesting configuration: {config.params}")
             reward, rps, latency = validate_configuration(config.params, agent)
             print(f"Validation - RPS: {rps:.2f}, Latency: {latency:.2f}ms, Reward: {reward:.2f}")
+        if return_rewards:
+            return rewards
+    
     except KeyboardInterrupt:
         print("\nKeyboard interrupt detected. Saving Q-table and cleaning up...")
         agent.save_q_table(qtable_path)

@@ -47,12 +47,12 @@ def main(num_episodes=100, sleep_interval=0.1, return_rewards=False):
     if return_rewards:
         return rewards
 
-    np.save("rewards_heuristic_iot.npy", np.array(rewards))
+    np.save("Third Scenario - IoT/rewards/rewards_heuristic_iot.npy", np.array(rewards))
     plt.plot(rewards)
     plt.xlabel("Episode")
     plt.ylabel("Total Reward")
     plt.title("Heuristic Policy - IoT")
-    plt.savefig("heuristic_policy_iot.png")
+    plt.savefig("Third Scenario - IoT/plots/heuristic_policy_iot.png")
     plt.show()
 
 if __name__ == "__main__":

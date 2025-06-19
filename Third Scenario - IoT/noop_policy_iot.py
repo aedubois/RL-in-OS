@@ -30,13 +30,13 @@ def main(num_episodes=100, sleep_interval=0.1, return_rewards=False):
     if return_rewards:
         return rewards
 
-    np.save("rewards_noop_iot.npy", np.array(rewards))
+    np.save("Third Scenario - IoT/rewards/rewards_noop_iot.npy", np.array(rewards))
     plt.plot(rewards)
     plt.title("Always No-Op Baseline - IoT")
     plt.xlabel("Episode")
     plt.ylabel("Total Reward")
     plt.grid()
-    plt.savefig("noop_baseline_iot.png")
+    plt.savefig("Third Scenario - IoT/plots/noop_baseline_iot.png")
     plt.show()
 
 if __name__ == "__main__":

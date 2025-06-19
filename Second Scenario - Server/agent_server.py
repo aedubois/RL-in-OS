@@ -4,7 +4,7 @@ import os
 import time
 
 class ServerAgent:
-    def __init__(self):
+    def __init__(self, exploration_rate=1.0):
         """
         Initialize the ServerAgent with metric names, actions, bins, and Q-learning parameters.
         """
@@ -39,7 +39,7 @@ class ServerAgent:
 
         self.learning_rate = 0.1
         self.discount_factor = 0.9
-        self.exploration_rate = 1.0
+        self.exploration_rate = exploration_rate
         self.exploration_decay = 0.995
 
         self.last_action_time = {}
