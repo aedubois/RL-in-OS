@@ -105,7 +105,6 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
         next_state = agent.get_state(collect_metrics(requests_per_sec))
         metrics = collect_metrics(requests_per_sec)
         reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-
         penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
         reward *= penalty_factor
         previous_actions.append(action_idx)
@@ -155,7 +154,7 @@ def plot_rewards(rewards, plots_dir):
     plt.savefig(plot_path)
     print(f"Plot saved as {plot_path}")
 
-def train_agent(num_episodes=100, nb_steps_per_episode=10, sleep_interval=1, return_rewards=False, exploration_rate=1.0):
+def train_agent(num_episodes=2, nb_steps_per_episode=1, sleep_interval=1, return_rewards=False, exploration_rate=1.0):
     agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
     rewards_dir = "Second Scenario - Server/rewards"
