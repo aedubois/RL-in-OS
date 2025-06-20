@@ -154,7 +154,7 @@ def plot_rewards(rewards, plots_dir):
     plt.savefig(plot_path)
     print(f"Plot saved as {plot_path}")
 
-def train_agent(num_episodes=2, nb_steps_per_episode=1, sleep_interval=1, return_rewards=False, exploration_rate=1.0):
+def train_agent(num_episodes=100, nb_steps_per_episode=20, sleep_interval=0.1, return_rewards=False, exploration_rate=1.0):
     agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
     rewards_dir = "Second Scenario - Server/rewards"
