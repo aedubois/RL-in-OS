@@ -25,6 +25,7 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
             reward = agent.compute_reward(metrics, latency=latency, p99=p99)
             penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
             reward *= penalty_factor
+            print("reward:", reward)
             previous_actions.append(action_idx)
             total_reward += reward
             state = next_state

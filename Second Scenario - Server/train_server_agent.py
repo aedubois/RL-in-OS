@@ -53,9 +53,14 @@ def reset_sys_params():
     os.system("sudo sysctl -w vm.dirty_ratio=20")
     os.system("sudo sysctl -w net.core.rmem_max=212992")
     os.system("sudo sysctl -w net.core.wmem_max=212992")
-    os.system("sudo sh -c 'echo 1 > /sys/module/zswap/parameters/enabled'")
-    os.system("sudo renice 0 -p $(pgrep nginx)")
+    os.system("sudo sysctl -w net.ipv4.tcp_tw_reuse=0")
+    os.system("sudo sysctl -w net.ipv4.tcp_fin_timeout=60") 
+    os.system("sudo sysctl -w net.core.somaxconn=128")
+    os.system("sudo systemctl restart nginx")
+    os.system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'")
+    os.system("pkill wrk")
     os.system("sudo truncate -s 0 /var/log/nginx/access.log")
+    time.sleep(2)  
 
 def get_current_params():
     dirty_ratio = os.popen("sysctl vm.dirty_ratio").read().split("=")[1].strip()
@@ -87,6 +92,7 @@ def validate_configuration(config_params, agent):
 def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
     reset_sys_params()
     requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+    print(f"wrk RPS: {requests_per_sec}, latency: {latency} ms, p99: {p99} ms")
     state = agent.get_state(collect_metrics(requests_per_sec))
     total_reward = 0
 
@@ -107,18 +113,19 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
         reward = agent.compute_reward(metrics, latency=latency, p99=p99)
         penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
         reward *= penalty_factor
+        print("reward:", reward)
         previous_actions.append(action_idx)
         agent.learn(state, action_idx, reward, next_state)
         state = next_state
-        total_reward += reward
+        total_reward += reward  # <-- CUMUL ICI
         time.sleep(sleep_interval)
 
-    # Final evaluation step
+    # Final evaluation step (optionnel, ne pas l'ajouter au total_reward pour rester cohérent)
     requests_per_sec, latency, p99, _ = run_wrk(duration=5)
     metrics = collect_metrics(requests_per_sec)
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     agent.learn(state, action_idx, reward, state)
-    return reward, requests_per_sec, latency
+    return total_reward, requests_per_sec, latency  # <-- ON RETOURNE LE TOTAL
 
 def update_best_configs(best_configs, reward, requests_per_sec, latency):
     config = Configuration(
@@ -154,7 +161,7 @@ def plot_rewards(rewards, plots_dir):
     plt.savefig(plot_path)
     print(f"Plot saved as {plot_path}")
 
-def train_agent(num_episodes=100, nb_steps_per_episode=20, sleep_interval=0.1, return_rewards=False, exploration_rate=1.0):
+def train_agent(num_episodes=30, nb_steps_per_episode=10, sleep_interval=0.1, return_rewards=False, exploration_rate=1.0):
     agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
     rewards_dir = "Second Scenario - Server/rewards"

@@ -6,16 +6,23 @@ from load_generator import run_wrk
 from train_server_agent import collect_metrics, reset_sys_params
 
 def heuristic_policy(metrics, agent):
-    """Apply a heuristic policy based on system metrics to select an action."""    
-    if metrics["iowait"] > 10:
+    """Apply a heuristic policy based on system metrics to select an action."""
+    # Si iowait > 1, baisse dirty_ratio pour accélérer le flush
+    if metrics["iowait"] > 1:
         return agent.actions.index("set_dirty_ratio_10")
-    if metrics["requests_per_sec"] < 50000 and metrics.get("latency", 0) > 100:
+    # Si la latence est élevée (> 1 ms) et le RPS est faible, augmente wmem_max
+    if metrics.get("latency", 0) > 1 and metrics["requests_per_sec"] < 100000:
         return agent.actions.index("set_wmem_max_16M")
-    if metrics["cpu_usage"] < 20:
-        return agent.actions.index("no_op")
+    # Si cpu_usage > 30%, augmente rmem_max pour améliorer le débit réseau
+    if metrics["cpu_usage"] > 30:
+        return agent.actions.index("set_rmem_max_16M")
+    # Si ctx_switches > 20000, augmente somaxconn pour éviter la saturation
+    if metrics.get("ctx_switches", 0) > 20000:
+        return agent.actions.index("set_somaxconn_1024")
+    # Sinon, no_op
     return agent.actions.index("no_op")
 
-def main(num_episodes=10, nb_steps_per_episode=1, sleep_interval=1, return_rewards=False):
+def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewards=False):
     """Run a heuristic agent on the server environment for a number of episodes."""
     agent = ServerAgent()
     rewards = []
@@ -38,6 +45,7 @@ def main(num_episodes=10, nb_steps_per_episode=1, sleep_interval=1, return_rewar
             reward = agent.compute_reward(metrics, latency=latency, p99=p99)
             penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
             reward *= penalty_factor
+            print("reward:", reward)
             previous_actions.append(action_idx)
             total_reward += reward
             state = next_state

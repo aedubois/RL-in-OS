@@ -14,25 +14,38 @@ class ServerAgent:
         self.state = dict.fromkeys(self.metric_names, 0.0)
 
         self.actions = [
-            "no_op",
             "set_dirty_ratio_10",
+            "set_dirty_ratio_20",
+            "set_dirty_ratio_30",
             "set_dirty_ratio_40",
             "set_rmem_max_1M",
+            "set_rmem_max_8M",
             "set_rmem_max_16M",
             "set_wmem_max_1M",
+            "set_wmem_max_8M",
             "set_wmem_max_16M",
-            "lower_thread_priority",
-            "enable_zswap",
-            "disable_zswap"
+            "set_tcp_tw_reuse_0",
+            "set_tcp_tw_reuse_1",
+            "set_tcp_fin_timeout_10",
+            "set_tcp_fin_timeout_30",
+            "set_somaxconn_128",
+            "set_somaxconn_1024",
+            "no_op", 
+            "reset_dirty_ratio",
+            "reset_rmem_max",
+            "reset_wmem_max",
+            "reset_tcp_tw_reuse",
+            "reset_tcp_fin_timeout",
+            "reset_somaxconn",
         ]
 
         self.bins = {
-            "cpu_usage": np.linspace(0, 1, 4),
-            "iowait": np.linspace(0, 1, 4),
-            "interrupts": np.linspace(0, 1, 4),
-            "ctx_switches": np.linspace(0, 1, 4),
-            "net_usage": np.linspace(0, 1, 4),
-            "requests_per_sec": np.linspace(0, 1, 5)
+            "cpu_usage": np.linspace(0, 100, 5),         # 0, 25, 50, 75, 100
+            "iowait": np.linspace(0, 5, 5),              # 0, 1.25, 2.5, 3.75, 5
+            "interrupts": np.linspace(0, 20000, 5),      # 0, 5000, 10000, 15000, 20000
+            "ctx_switches": np.linspace(0, 100000, 5),   # 0, 25000, 50000, 75000, 100000
+            "net_usage": np.linspace(0, 100, 5),         # 0, 25, 50, 75, 100 (en Mo/s)
+            "requests_per_sec": np.linspace(0, 100000, 6) # 0, 20000, 40000, 60000, 80000, 100000
         }
         q_table_shape = tuple(len(b) - 1 for b in self.bins.values()) + (len(self.actions),)
         self.q_table = np.zeros(q_table_shape)
@@ -92,83 +105,131 @@ class ServerAgent:
         td_error = td_target - self.q_table[idx][action]
         self.q_table[idx][action] += self.learning_rate * td_error
 
-    def apply_action(self, action_idx):
+    def apply_action(self, action_idx, metrics_before=None):
         """
         Apply the selected action to the system.
+        Log ctx_switches avant/après, rollback si aggravation, cooldown/pénalité pour actions toxiques.
         """
         action = self.actions[action_idx]
         current_time = time.time()
-        
+
         if action in self.last_action_time:
             time_since_last = current_time - self.last_action_time[action]
-            if time_since_last < 5: 
+            if time_since_last < 5:
                 return False
-    
+
         self.last_action_time[action] = current_time
+
+        # Log ctx_switches avant action
+        ctx_before = metrics_before.get("ctx_switches", 0) if metrics_before else None
+
+        # Appliquer l'action
         if action == "no_op":
             pass
         elif action == "set_dirty_ratio_10":
             os.system("sudo sysctl -w vm.dirty_ratio=10")
+        elif action == "set_dirty_ratio_20":
+            os.system("sudo sysctl -w vm.dirty_ratio=20")
+        elif action == "set_dirty_ratio_30":
+            os.system("sudo sysctl -w vm.dirty_ratio=30")
         elif action == "set_dirty_ratio_40":
             os.system("sudo sysctl -w vm.dirty_ratio=40")
         elif action == "set_rmem_max_1M":
             os.system("sudo sysctl -w net.core.rmem_max=1048576")
+        elif action == "set_rmem_max_8M":
+            os.system("sudo sysctl -w net.core.rmem_max=8388608")
         elif action == "set_rmem_max_16M":
             os.system("sudo sysctl -w net.core.rmem_max=16777216")
         elif action == "set_wmem_max_1M":
             os.system("sudo sysctl -w net.core.wmem_max=1048576")
+        elif action == "set_wmem_max_8M":
+            os.system("sudo sysctl -w net.core.wmem_max=8388608")
         elif action == "set_wmem_max_16M":
             os.system("sudo sysctl -w net.core.wmem_max=16777216")
-        elif action == "lower_thread_priority":
-            os.system("sudo renice 10 -p $(pgrep nginx | tr '\n' ' ')")
-        elif action == "enable_zswap":
-            os.system("sudo sh -c 'echo 1 > /sys/module/zswap/parameters/enabled'")
-        elif action == "disable_zswap":
-            os.system("sudo sh -c 'echo 0 > /sys/module/zswap/parameters/enabled'")
+        elif action == "set_tcp_tw_reuse_0":
+            os.system("sudo sysctl -w net.ipv4.tcp_tw_reuse=0")
+        elif action == "set_tcp_tw_reuse_1":
+            os.system("sudo sysctl -w net.ipv4.tcp_tw_reuse=1")
+        elif action == "set_tcp_fin_timeout_10":
+            os.system("sudo sysctl -w net.ipv4.tcp_fin_timeout=10")
+        elif action == "set_tcp_fin_timeout_30":
+            os.system("sudo sysctl -w net.ipv4.tcp_fin_timeout=30")
+        elif action == "set_somaxconn_128":
+            os.system("sudo sysctl -w net.core.somaxconn=128")
+        elif action == "set_somaxconn_1024":
+            os.system("sudo sysctl -w net.core.somaxconn=1024")
+        elif action == "reset_rmem_max":
+            os.system("sudo sysctl -w net.core.rmem_max=212992")
+        elif action == "reset_wmem_max":
+            os.system("sudo sysctl -w net.core.wmem_max=212992")
+
+        # Attendre un peu pour que l'effet de l'action soit visible
+        time.sleep(0.2)
+
+        # Log ctx_switches après action
+        ctx_after = None
+        if metrics_before is not None:
+            import psutil
+            ctx_after = psutil.cpu_stats().ctx_switches
+            print(f"[ACTION] {action} | ctx_switches avant: {ctx_before}, après: {ctx_after}")
+
+            # Rollback si aggravation > X% (ex: 20%)
+            if ctx_before and ctx_after and ctx_after > ctx_before * 1.2:
+                print(f"[ROLLBACK] ctx_switches aggravé de plus de 20% par {action}, rollback!")
+                self.rollback_action(action)
+                return False
+
+        # Pénalité exponentielle/cooldown pour actions toxiques
+        if action == "disable_zswap":
+            print("[PENALTY] Action toxique détectée: disable_zswap")
+            self.last_action_time[action] = current_time + 30  # cooldown de 30s
+
         return True
+
+    def rollback_action(self, action):
+        """
+        Rollback d'une action si aggravation détectée.
+        """
+        if action.startswith("set_dirty_ratio"):
+            os.system("sudo sysctl -w vm.dirty_ratio=20")
+        elif action.startswith("set_rmem_max"):
+            os.system("sudo sysctl -w net.core.rmem_max=212992")
+        elif action.startswith("set_wmem_max"):
+            os.system("sudo sysctl -w net.core.wmem_max=212992")
+        elif action.startswith("set_tcp_tw_reuse"):
+            os.system("sudo sysctl -w net.ipv4.tcp_tw_reuse=0")
+        elif action.startswith("set_tcp_fin_timeout"):
+            os.system("sudo sysctl -w net.ipv4.tcp_fin_timeout=60")
+        elif action.startswith("set_somaxconn"):
+            os.system("sudo sysctl -w net.core.somaxconn=128")
 
     def compute_reward(self, metrics, latency=None, p99=None, debug=False):
         """
         Compute the reward based on system metrics and latency.
+        Version simplifiée : reward = requests_per_sec uniquement,
+        ctx_penalty refactorisé.
         """
         rps = metrics.get("requests_per_sec", 0)
-        iowait = metrics.get("iowait", 0)
-        cpu = metrics.get("cpu_usage", 0)
         ctx_switches = metrics.get("ctx_switches", 0)
-        interrupts = metrics.get("interrupts", 0)
+        reward = rps
 
-        rps_reward = rps / (1 + rps / 50000)
+        # Pénalité context switches (plus douce)
+        ctx_penalty = (ctx_switches / 20000) ** 1.1
+        reward -= ctx_penalty
 
+        # Pénalité latence (si mesurée)
         if latency is not None:
-            latency_factor = max(0, 1 - (latency / 100)) 
-            rps_reward *= latency_factor
-        # Pénalités plus douces
-        cpu_penalty = np.exp(cpu - 90) * 5 if cpu > 90 else cpu * 0.5 
-        io_penalty = iowait * (50 if iowait > 5 else 10)
-        ctx_penalty = np.log1p(ctx_switches) * 0.001
-        int_penalty = np.log1p(interrupts) * 0.001
+            reward -= (latency / 10)  # 10ms de latence = -1
 
-        reward = (
-            rps_reward
-            - cpu_penalty 
-            - io_penalty
-            - ctx_penalty 
-            - int_penalty
-        )
+        # Pénalité p99 (si mesurée)
+        if p99 is not None:
+            reward -= (p99 / 10)
+
+        # Clamp pour éviter des rewards trop extrêmes
+        reward = max(reward, -100000)
 
         if debug:
-            print("\n=== Reward Calculation Details ===")
-            print(f"Base RPS: {rps:.2f}")
-            print(f"Soft capped RPS reward: {rps_reward:.2f}")
-            if latency is not None:
-                print(f"Latency factor: {latency_factor:.2f}")
-                print(f"Adjusted RPS reward: {rps_reward:.2f}")
-            print(f"CPU penalty: {cpu_penalty:.2f} (usage: {cpu}%)")
-            print(f"IO penalty: {io_penalty:.2f} (iowait: {iowait}%)")
-            print(f"Context switches penalty: {ctx_penalty:.2f}")
-            print(f"Interrupts penalty: {int_penalty:.2f}")
-            print(f"Final reward: {reward:.2f}")
-            print("==============================\n")
+            print(f"Reward: {reward:.2f} | RPS: {rps:.2f} | ctx_penalty: {ctx_penalty:.2f} | latency: {latency} | p99: {p99}")
 
         return reward
 

@@ -44,4 +44,5 @@ def run_wrk(url="http://localhost/server.html", duration=10, threads=2, connecti
     return req_per_sec, latency, p99, output
 
 if __name__ == "__main__":
-    rps, _, _, _ = run_wrk()
+    rps, latency, p99, _ = run_wrk(duration=2)
+    print(f"requests_per_sec: {rps}")
