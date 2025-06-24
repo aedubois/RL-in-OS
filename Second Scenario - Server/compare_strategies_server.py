@@ -5,6 +5,7 @@ import os
 REWARDS_DIR = "Second Scenario - Server/rewards"
 
 def load_rewards(filename):
+    """"Load rewards data from a .npy file."""
     path = os.path.join(REWARDS_DIR, filename)
     if not os.path.exists(path):
         print(f"File not found: {path}")
@@ -12,9 +13,11 @@ def load_rewards(filename):
     return np.load(path)
 
 def moving_average(data, window=5):
+    """Compute the moving average of the data with a specified window size."""
     return np.convolve(data, np.ones(window)/window, mode='valid')
 
 def main():
+    """Main function to compare strategies in the server scenario."""
     rewards_files = {
         "No-op": "rewards_noop_server.npy",
         "Random": "rewards_random_server.npy",

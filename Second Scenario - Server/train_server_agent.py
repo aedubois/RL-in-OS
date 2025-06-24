@@ -63,16 +63,20 @@ def reset_sys_params():
     time.sleep(2)  
 
 def get_current_params():
-    dirty_ratio = os.popen("sysctl vm.dirty_ratio").read().split("=")[1].strip()
-    rmem = os.popen("sysctl net.core.rmem_max").read().split("=")[1].strip()
-    wmem = os.popen("sysctl net.core.wmem_max").read().split("=")[1].strip()
-    zswap = os.popen("cat /sys/module/zswap/parameters/enabled").read().strip()
-    return {
-        "dirty_ratio": dirty_ratio,
-        "rmem_max": rmem,
-        "wmem_max": wmem,
-        "zswap": zswap
-    }
+    params = {}
+    # dirty_ratio
+    params["dirty_ratio"] = os.popen("sysctl vm.dirty_ratio").read().split("=")[1].strip()
+    # rmem_max
+    params["rmem_max"] = os.popen("sysctl net.core.rmem_max").read().split("=")[1].strip()
+    # wmem_max
+    params["wmem_max"] = os.popen("sysctl net.core.wmem_max").read().split("=")[1].strip()
+    # tcp_tw_reuse
+    params["tcp_tw_reuse"] = os.popen("sysctl net.ipv4.tcp_tw_reuse").read().split("=")[1].strip()
+    # tcp_fin_timeout
+    params["tcp_fin_timeout"] = os.popen("sysctl net.ipv4.tcp_fin_timeout").read().split("=")[1].strip()
+    # somaxconn
+    params["somaxconn"] = os.popen("sysctl net.core.somaxconn").read().split("=")[1].strip()
+    return params
 
 def validate_configuration(config_params, agent):
     for param, value in config_params.items():
@@ -82,8 +86,13 @@ def validate_configuration(config_params, agent):
             os.system(f"sudo sysctl -w net.core.rmem_max={value}")
         elif param == "wmem_max":
             os.system(f"sudo sysctl -w net.core.wmem_max={value}")
-        elif param == "zswap":
-            os.system(f"sudo sh -c 'echo {value} > /sys/module/zswap/parameters/enabled'")
+        elif param == "tcp_tw_reuse":
+            os.system(f"sudo sysctl -w net.ipv4.tcp_tw_reuse={value}")
+        elif param == "tcp_fin_timeout":
+            os.system(f"sudo sysctl -w net.ipv4.tcp_fin_timeout={value}")
+        elif param == "somaxconn":
+            os.system(f"sudo sysctl -w net.core.somaxconn={value}")
+
     rps, latency, p99, _ = run_wrk(duration=10)
     metrics = collect_metrics(rps)
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
@@ -111,21 +120,22 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
         next_state = agent.get_state(collect_metrics(requests_per_sec))
         metrics = collect_metrics(requests_per_sec)
         reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-        penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-        reward *= penalty_factor
+        if agent.actions[action_idx] != "no_op":
+            penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+            reward *= penalty_factor
         print("reward:", reward)
         previous_actions.append(action_idx)
         agent.learn(state, action_idx, reward, next_state)
         state = next_state
-        total_reward += reward  # <-- CUMUL ICI
+        total_reward += reward 
         time.sleep(sleep_interval)
 
-    # Final evaluation step (optionnel, ne pas l'ajouter au total_reward pour rester cohérent)
+    # Final evaluation step 
     requests_per_sec, latency, p99, _ = run_wrk(duration=5)
     metrics = collect_metrics(requests_per_sec)
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     agent.learn(state, action_idx, reward, state)
-    return total_reward, requests_per_sec, latency  # <-- ON RETOURNE LE TOTAL
+    return total_reward, requests_per_sec, latency 
 
 def update_best_configs(best_configs, reward, requests_per_sec, latency):
     config = Configuration(
@@ -142,6 +152,7 @@ def update_best_configs(best_configs, reward, requests_per_sec, latency):
     return best_configs
 
 def plot_rewards(rewards, plots_dir):
+    """ Plot the rewards and save the plot to a file."""
     os.makedirs(plots_dir, exist_ok=True)
     existing = [int(f.split("_")[1].split(".")[0]) for f in os.listdir(plots_dir) if f.startswith("plot_") and f.endswith(".png")]
     next_num = max(existing) + 1 if existing else 1
@@ -161,7 +172,8 @@ def plot_rewards(rewards, plots_dir):
     plt.savefig(plot_path)
     print(f"Plot saved as {plot_path}")
 
-def train_agent(num_episodes=30, nb_steps_per_episode=10, sleep_interval=0.1, return_rewards=False, exploration_rate=1.0):
+def train_agent(num_episodes=100, nb_steps_per_episode=20, sleep_interval=0.1, return_rewards=False, exploration_rate=1.0):
+    """Train a reinforcement learning agent for the server scenario."""
     agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
     rewards_dir = "Second Scenario - Server/rewards"
@@ -179,7 +191,7 @@ def train_agent(num_episodes=30, nb_steps_per_episode=10, sleep_interval=0.1, re
             print(f"\n=== Episode {episode+1} / {num_episodes} ===")
             reward, requests_per_sec, latency = run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions)
             rewards.append(reward)
-            print(f"Reward of episode {episode+1} : {reward}")
+            print(f"Average reward of episode {episode+1} : {reward/nb_steps_per_episode}")
 
             if reward > best_reward:
                 best_reward = reward

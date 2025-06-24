@@ -31,12 +31,8 @@ class ServerAgent:
             "set_somaxconn_128",
             "set_somaxconn_1024",
             "no_op", 
-            "reset_dirty_ratio",
             "reset_rmem_max",
             "reset_wmem_max",
-            "reset_tcp_tw_reuse",
-            "reset_tcp_fin_timeout",
-            "reset_somaxconn",
         ]
 
         self.bins = {
@@ -108,7 +104,6 @@ class ServerAgent:
     def apply_action(self, action_idx, metrics_before=None):
         """
         Apply the selected action to the system.
-        Log ctx_switches avant/après, rollback si aggravation, cooldown/pénalité pour actions toxiques.
         """
         action = self.actions[action_idx]
         current_time = time.time()
@@ -120,10 +115,6 @@ class ServerAgent:
 
         self.last_action_time[action] = current_time
 
-        # Log ctx_switches avant action
-        ctx_before = metrics_before.get("ctx_switches", 0) if metrics_before else None
-
-        # Appliquer l'action
         if action == "no_op":
             pass
         elif action == "set_dirty_ratio_10":
@@ -163,75 +154,10 @@ class ServerAgent:
         elif action == "reset_wmem_max":
             os.system("sudo sysctl -w net.core.wmem_max=212992")
 
-        # Attendre un peu pour que l'effet de l'action soit visible
-        time.sleep(0.2)
+        time.sleep(0.5)  # Wait for the system to apply the changes
 
-        # Log ctx_switches après action
-        ctx_after = None
-        if metrics_before is not None:
-            import psutil
-            ctx_after = psutil.cpu_stats().ctx_switches
-            print(f"[ACTION] {action} | ctx_switches avant: {ctx_before}, après: {ctx_after}")
 
-            # Rollback si aggravation > X% (ex: 20%)
-            if ctx_before and ctx_after and ctx_after > ctx_before * 1.2:
-                print(f"[ROLLBACK] ctx_switches aggravé de plus de 20% par {action}, rollback!")
-                self.rollback_action(action)
-                return False
-
-        # Pénalité exponentielle/cooldown pour actions toxiques
-        if action == "disable_zswap":
-            print("[PENALTY] Action toxique détectée: disable_zswap")
-            self.last_action_time[action] = current_time + 30  # cooldown de 30s
-
-        return True
-
-    def rollback_action(self, action):
-        """
-        Rollback d'une action si aggravation détectée.
-        """
-        if action.startswith("set_dirty_ratio"):
-            os.system("sudo sysctl -w vm.dirty_ratio=20")
-        elif action.startswith("set_rmem_max"):
-            os.system("sudo sysctl -w net.core.rmem_max=212992")
-        elif action.startswith("set_wmem_max"):
-            os.system("sudo sysctl -w net.core.wmem_max=212992")
-        elif action.startswith("set_tcp_tw_reuse"):
-            os.system("sudo sysctl -w net.ipv4.tcp_tw_reuse=0")
-        elif action.startswith("set_tcp_fin_timeout"):
-            os.system("sudo sysctl -w net.ipv4.tcp_fin_timeout=60")
-        elif action.startswith("set_somaxconn"):
-            os.system("sudo sysctl -w net.core.somaxconn=128")
-
-    def compute_reward(self, metrics, latency=None, p99=None, debug=False):
-        """
-        Compute the reward based on system metrics and latency.
-        Version simplifiée : reward = requests_per_sec uniquement,
-        ctx_penalty refactorisé.
-        """
-        rps = metrics.get("requests_per_sec", 0)
-        ctx_switches = metrics.get("ctx_switches", 0)
-        reward = rps
-
-        # Pénalité context switches (plus douce)
-        ctx_penalty = (ctx_switches / 20000) ** 1.1
-        reward -= ctx_penalty
-
-        # Pénalité latence (si mesurée)
-        if latency is not None:
-            reward -= (latency / 10)  # 10ms de latence = -1
-
-        # Pénalité p99 (si mesurée)
-        if p99 is not None:
-            reward -= (p99 / 10)
-
-        # Clamp pour éviter des rewards trop extrêmes
-        reward = max(reward, -100000)
-
-        if debug:
-            print(f"Reward: {reward:.2f} | RPS: {rps:.2f} | ctx_penalty: {ctx_penalty:.2f} | latency: {latency} | p99: {p99}")
-
-        return reward
+#reward fct 
 
     def penalize_consecutive_actions(self, current_action, previous_actions, window=3):
         """

@@ -23,15 +23,16 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
             next_state = agent.get_state(collect_metrics(requests_per_sec))
             metrics = collect_metrics(requests_per_sec)
             reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-            penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-            reward *= penalty_factor
+            if agent.actions[action_idx] != "no_op":
+                penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+                reward *= penalty_factor
             print("reward:", reward)
             previous_actions.append(action_idx)
             total_reward += reward
             state = next_state
             time.sleep(sleep_interval)
         rewards.append(total_reward)
-        print(f"Episode {episode+1}: total reward = {total_reward:.2f}")
+        print(f"Average reward for episode {episode+1}: {total_reward/nb_steps_per_episode}")
     os.makedirs("Second Scenario - Server/rewards", exist_ok=True)
     np.save("Second Scenario - Server/rewards/rewards_random_server.npy", np.array(rewards))
     if return_rewards:

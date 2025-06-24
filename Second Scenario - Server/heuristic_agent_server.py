@@ -7,19 +7,19 @@ from train_server_agent import collect_metrics, reset_sys_params
 
 def heuristic_policy(metrics, agent):
     """Apply a heuristic policy based on system metrics to select an action."""
-    # Si iowait > 1, baisse dirty_ratio pour accélérer le flush
-    if metrics["iowait"] > 1:
+    if metrics["iowait"] > 1: 
+        # If I/O wait is high, increase dirty ratio
         return agent.actions.index("set_dirty_ratio_10")
-    # Si la latence est élevée (> 1 ms) et le RPS est faible, augmente wmem_max
     if metrics.get("latency", 0) > 1 and metrics["requests_per_sec"] < 100000:
+        # If latency is high and requests per second is low, increase memory limits
         return agent.actions.index("set_wmem_max_16M")
-    # Si cpu_usage > 30%, augmente rmem_max pour améliorer le débit réseau
     if metrics["cpu_usage"] > 30:
+        # If CPU usage is high, reduce dirty ratio
         return agent.actions.index("set_rmem_max_16M")
-    # Si ctx_switches > 20000, augmente somaxconn pour éviter la saturation
     if metrics.get("ctx_switches", 0) > 20000:
+        # If context switches are high, increase TCP reuse
         return agent.actions.index("set_somaxconn_1024")
-    # Sinon, no_op
+    # If none of the conditions are met, do nothing
     return agent.actions.index("no_op")
 
 def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewards=False):
@@ -43,15 +43,16 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
             next_state = agent.get_state(collect_metrics(requests_per_sec))
             metrics = collect_metrics(requests_per_sec)
             reward = agent.compute_reward(metrics, latency=latency, p99=p99)
-            penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-            reward *= penalty_factor
+            if agent.actions[action_idx] != "no_op":
+                penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+                reward *= penalty_factor
             print("reward:", reward)
             previous_actions.append(action_idx)
             total_reward += reward
             state = next_state
             time.sleep(sleep_interval)
         rewards.append(total_reward)
-        print(f"Episode {episode+1}: total reward = {total_reward:.2f}")
+        print(f"Average reward for episode {episode+1}: {total_reward/nb_steps_per_episode}")
     os.makedirs("Second Scenario - Server/rewards", exist_ok=True)
     np.save("Second Scenario - Server/rewards/rewards_heuristic_server.npy", np.array(rewards))
     if return_rewards:
