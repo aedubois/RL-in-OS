@@ -12,6 +12,7 @@ from datetime import datetime
 
 @dataclass
 class Configuration:
+    """Data class to hold configuration parameters and their associated metrics."""
     params: Dict
     reward: float
     rps: float
@@ -19,6 +20,7 @@ class Configuration:
     timestamp: str
 
     def to_dict(self):
+        """Convert the configuration to a dictionary for JSON serialization."""
         return {
             "params": self.params,
             "reward": self.reward,
@@ -28,9 +30,7 @@ class Configuration:
         }
 
 def collect_metrics(requests_per_sec):
-    """
-    Collect system metrics and return them as a dictionary.
-    """
+    """Collect system metrics and return them as a dictionary."""
     cpu = psutil.cpu_percent(interval=0.1)
     iowait = psutil.cpu_times_percent(interval=0.1).iowait
     interrupts = psutil.cpu_stats().interrupts
@@ -47,9 +47,7 @@ def collect_metrics(requests_per_sec):
     }
 
 def reset_sys_params():
-    """
-    Reset system parameters to default values between episodes.
-    """
+    """Reset system parameters to default values between episodes."""
     os.system("sudo sysctl -w vm.dirty_ratio=20")
     os.system("sudo sysctl -w net.core.rmem_max=212992")
     os.system("sudo sysctl -w net.core.wmem_max=212992")
@@ -63,22 +61,18 @@ def reset_sys_params():
     time.sleep(2)  
 
 def get_current_params():
+    """Get current system parameters for logging and validation."""
     params = {}
-    # dirty_ratio
     params["dirty_ratio"] = os.popen("sysctl vm.dirty_ratio").read().split("=")[1].strip()
-    # rmem_max
     params["rmem_max"] = os.popen("sysctl net.core.rmem_max").read().split("=")[1].strip()
-    # wmem_max
     params["wmem_max"] = os.popen("sysctl net.core.wmem_max").read().split("=")[1].strip()
-    # tcp_tw_reuse
     params["tcp_tw_reuse"] = os.popen("sysctl net.ipv4.tcp_tw_reuse").read().split("=")[1].strip()
-    # tcp_fin_timeout
     params["tcp_fin_timeout"] = os.popen("sysctl net.ipv4.tcp_fin_timeout").read().split("=")[1].strip()
-    # somaxconn
     params["somaxconn"] = os.popen("sysctl net.core.somaxconn").read().split("=")[1].strip()
     return params
 
 def validate_configuration(config_params, agent):
+    """Validate a specific configuration by applying it and running the load generator."""
     for param, value in config_params.items():
         if param == "dirty_ratio":
             os.system(f"sudo sysctl -w vm.dirty_ratio={value}")
@@ -99,6 +93,7 @@ def validate_configuration(config_params, agent):
     return reward, rps, latency
 
 def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
+    """Run a single episode of the reinforcement learning agent on the server environment."""
     reset_sys_params()
     requests_per_sec, latency, p99, _ = run_wrk(duration=2)
     print(f"wrk RPS: {requests_per_sec}, latency: {latency} ms, p99: {p99} ms")
@@ -107,14 +102,6 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
 
     for step in range(nb_steps_per_episode):
         action_idx = agent.select_action(state)
-        max_attempts = 3
-        for _ in range(max_attempts):
-            if agent.apply_action(action_idx):
-                break
-            action_idx = agent.select_action(state)
-        else:
-            continue
-
         print(f"Applying action: {agent.actions[action_idx]}")
         requests_per_sec, latency, p99, _ = run_wrk(duration=2)
         next_state = agent.get_state(collect_metrics(requests_per_sec))
@@ -138,6 +125,7 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
     return total_reward, requests_per_sec, latency 
 
 def update_best_configs(best_configs, reward, requests_per_sec, latency):
+    """Update the list of best configurations with the current episode's results."""
     config = Configuration(
         params=get_current_params(),
         reward=reward,

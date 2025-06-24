@@ -5,21 +5,59 @@ from agent_server import ServerAgent
 from load_generator import run_wrk
 from train_server_agent import collect_metrics, reset_sys_params
 
+def get_sysctl_value(param):
+    """Get the value of a sysctl parameter."""
+    try:
+        return int(os.popen(f"sysctl {param}").read().split("=")[1].strip())
+    except Exception:
+        return None
+
 def heuristic_policy(metrics, agent):
     """Apply a heuristic policy based on system metrics to select an action."""
-    if metrics["iowait"] > 1: 
-        # If I/O wait is high, increase dirty ratio
+
+    # dirty_ratio
+    dirty_ratio = get_sysctl_value("vm.dirty_ratio")
+    if metrics["iowait"] > 1 and dirty_ratio != 10:
         return agent.actions.index("set_dirty_ratio_10")
-    if metrics.get("latency", 0) > 1 and metrics["requests_per_sec"] < 100000:
-        # If latency is high and requests per second is low, increase memory limits
+    if metrics["iowait"] < 0.2 and dirty_ratio != 40:
+        return agent.actions.index("set_dirty_ratio_40")
+
+    # wmem_max
+    wmem_max = get_sysctl_value("net.core.wmem_max")
+    if metrics.get("latency", 0) > 1 and metrics["requests_per_sec"] < 100000 and wmem_max != 16777216:
         return agent.actions.index("set_wmem_max_16M")
-    if metrics["cpu_usage"] > 30:
-        # If CPU usage is high, reduce dirty ratio
+    if metrics.get("latency", 0) > 0.5 and wmem_max != 8388608:
+        return agent.actions.index("set_wmem_max_8M")
+
+    # rmem_max
+    rmem_max = get_sysctl_value("net.core.rmem_max")
+    if metrics["cpu_usage"] > 30 and rmem_max != 16777216:
         return agent.actions.index("set_rmem_max_16M")
-    if metrics.get("ctx_switches", 0) > 20000:
-        # If context switches are high, increase TCP reuse
+    if metrics["cpu_usage"] < 10 and rmem_max != 1048576:
+        return agent.actions.index("set_rmem_max_1M")
+
+    # ctx_switches / somaxconn
+    somaxconn = get_sysctl_value("net.core.somaxconn")
+    if metrics.get("ctx_switches", 0) > 20000 and somaxconn != 1024:
         return agent.actions.index("set_somaxconn_1024")
-    # If none of the conditions are met, do nothing
+    if metrics.get("ctx_switches", 0) < 5000 and somaxconn != 128:
+        return agent.actions.index("set_somaxconn_128")
+
+    # tcp_tw_reuse
+    tcp_tw_reuse = get_sysctl_value("net.ipv4.tcp_tw_reuse")
+    if metrics.get("latency", 0) > 2 and tcp_tw_reuse != 1:
+        return agent.actions.index("set_tcp_tw_reuse_1")
+    if metrics.get("latency", 0) < 0.5 and tcp_tw_reuse != 0:
+        return agent.actions.index("set_tcp_tw_reuse_0")
+
+    # tcp_fin_timeout
+    tcp_fin_timeout = get_sysctl_value("net.ipv4.tcp_fin_timeout")
+    if metrics.get("interrupts", 0) > 10000 and tcp_fin_timeout != 10:
+        return agent.actions.index("set_tcp_fin_timeout_10")
+    if metrics.get("interrupts", 0) < 2000 and tcp_fin_timeout != 60:
+        return agent.actions.index("set_tcp_fin_timeout_30")
+
+    # by default, do nothing
     return agent.actions.index("no_op")
 
 def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewards=False):

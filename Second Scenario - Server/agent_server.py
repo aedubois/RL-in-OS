@@ -101,19 +101,11 @@ class ServerAgent:
         td_error = td_target - self.q_table[idx][action]
         self.q_table[idx][action] += self.learning_rate * td_error
 
-    def apply_action(self, action_idx, metrics_before=None):
+    def apply_action(self, action_idx):
         """
         Apply the selected action to the system.
         """
         action = self.actions[action_idx]
-        current_time = time.time()
-
-        if action in self.last_action_time:
-            time_since_last = current_time - self.last_action_time[action]
-            if time_since_last < 5:
-                return False
-
-        self.last_action_time[action] = current_time
 
         if action == "no_op":
             pass
@@ -153,11 +145,40 @@ class ServerAgent:
             os.system("sudo sysctl -w net.core.rmem_max=212992")
         elif action == "reset_wmem_max":
             os.system("sudo sysctl -w net.core.wmem_max=212992")
+        
+        time.sleep(0.5) 
 
-        time.sleep(0.5)  # Wait for the system to apply the changes
+    def compute_reward(self, metrics, latency=None, p99=None, debug=False):
+        """
+        Compute the reward based on system metrics and latency.
+        """
 
+        rps = metrics.get("requests_per_sec", 0)
+        iowait = metrics.get("iowait", 0)
+        cpu = metrics.get("cpu_usage", 0)
+        ctx_switches = metrics.get("ctx_switches", 0)
+        interrupts = metrics.get("interrupts", 0)
 
-#reward fct 
+        rps_reward = rps / (1 + rps / 50000)
+
+        if latency is not None:
+            latency_factor = max(0, 1 - (latency / 100)) 
+            rps_reward *= latency_factor
+
+        cpu_penalty = np.exp(cpu - 80) * 10 if cpu > 80 else cpu * 0.5 
+        io_penalty = iowait * (100 if iowait > 5 else 10)
+        ctx_penalty = np.log1p(ctx_switches) * 0.001
+        int_penalty = np.log1p(interrupts) * 0.001
+
+        reward = (
+            rps_reward
+            - cpu_penalty 
+            - io_penalty
+            - ctx_penalty 
+            - int_penalty
+        )
+
+        return max(reward, 0)
 
     def penalize_consecutive_actions(self, current_action, previous_actions, window=3):
         """
