@@ -29,21 +29,17 @@ class Configuration:
             "timestamp": self.timestamp
         }
 
-def collect_metrics(requests_per_sec):
-    """Collect system metrics and return them as a dictionary."""
-    cpu = psutil.cpu_percent(interval=0.1)
-    iowait = psutil.cpu_times_percent(interval=0.1).iowait
-    interrupts = psutil.cpu_stats().interrupts
-    ctx_switches = psutil.cpu_stats().ctx_switches
-    net = psutil.net_io_counters()
-    net_usage = (net.bytes_sent + net.bytes_recv) / 1e6
+def collect_metrics(requests_per_sec, latency):
+    """Collect nginx-specific metrics and return them as a dictionary"""
+    import psutil
+    nginx_pids = [p.pid for p in psutil.process_iter(['name']) if p.info['name'] == 'nginx']
+    cpu = sum(psutil.Process(pid).cpu_percent(interval=0.1) for pid in nginx_pids) if nginx_pids else 0.0
+    mem = sum(psutil.Process(pid).memory_info().rss for pid in nginx_pids) / 1e6 if nginx_pids else 0.0
     return {
         "cpu_usage": cpu,
-        "iowait": iowait,
-        "interrupts": interrupts,
-        "ctx_switches": ctx_switches,
-        "net_usage": net_usage,
-        "requests_per_sec": requests_per_sec
+        "mem_usage": mem,
+        "requests_per_sec": requests_per_sec,
+        "latency": latency if latency is not None else 0.0
     }
 
 def reset_sys_params():
@@ -72,23 +68,9 @@ def get_current_params():
     return params
 
 def validate_configuration(config_params, agent):
-    """Validate a specific configuration by applying it and running the load generator."""
-    for param, value in config_params.items():
-        if param == "dirty_ratio":
-            os.system(f"sudo sysctl -w vm.dirty_ratio={value}")
-        elif param == "rmem_max":
-            os.system(f"sudo sysctl -w net.core.rmem_max={value}")
-        elif param == "wmem_max":
-            os.system(f"sudo sysctl -w net.core.wmem_max={value}")
-        elif param == "tcp_tw_reuse":
-            os.system(f"sudo sysctl -w net.ipv4.tcp_tw_reuse={value}")
-        elif param == "tcp_fin_timeout":
-            os.system(f"sudo sysctl -w net.ipv4.tcp_fin_timeout={value}")
-        elif param == "somaxconn":
-            os.system(f"sudo sysctl -w net.core.somaxconn={value}")
-
+    """Validate a specific configuration by applying it and running a load test."""
     rps, latency, p99, _ = run_wrk(duration=10)
-    metrics = collect_metrics(rps)
+    metrics = collect_metrics(rps, latency)  
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     return reward, rps, latency
 
@@ -97,16 +79,20 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
     reset_sys_params()
     requests_per_sec, latency, p99, _ = run_wrk(duration=2)
     print(f"wrk RPS: {requests_per_sec}, latency: {latency} ms, p99: {p99} ms")
-    state = agent.get_state(collect_metrics(requests_per_sec))
+    state = agent.get_state(collect_metrics(requests_per_sec, latency))
     total_reward = 0
+    last_rps = requests_per_sec
 
     for step in range(nb_steps_per_episode):
         action_idx = agent.select_action(state)
         print(f"Applying action: {agent.actions[action_idx]}")
+        agent.apply_action(action_idx)
         requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-        next_state = agent.get_state(collect_metrics(requests_per_sec))
-        metrics = collect_metrics(requests_per_sec)
-        reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+        next_state = agent.get_state(collect_metrics(requests_per_sec, latency))
+        metrics = collect_metrics(requests_per_sec, latency)
+        print("metrics:", metrics)
+        reward = agent.compute_reward(metrics, latency=latency, p99=p99, prev_rps=last_rps)
+        last_rps = requests_per_sec
         if agent.actions[action_idx] != "no_op":
             penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
             reward *= penalty_factor
@@ -119,7 +105,7 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
 
     # Final evaluation step 
     requests_per_sec, latency, p99, _ = run_wrk(duration=5)
-    metrics = collect_metrics(requests_per_sec)
+    metrics = collect_metrics(requests_per_sec, latency)
     reward = agent.compute_reward(metrics, latency=latency, p99=p99)
     agent.learn(state, action_idx, reward, state)
     return total_reward, requests_per_sec, latency 
@@ -178,7 +164,7 @@ def train_agent(num_episodes=100, nb_steps_per_episode=20, sleep_interval=0.1, r
         for episode in range(num_episodes):
             print(f"\n=== Episode {episode+1} / {num_episodes} ===")
             reward, requests_per_sec, latency = run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions)
-            rewards.append(reward)
+            rewards.append(reward/nb_steps_per_episode)
             print(f"Average reward of episode {episode+1} : {reward/nb_steps_per_episode}")
 
             if reward > best_reward:

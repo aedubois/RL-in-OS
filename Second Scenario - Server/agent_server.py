@@ -9,7 +9,7 @@ class ServerAgent:
         Initialize the ServerAgent with metric names, actions, bins, and Q-learning parameters.
         """
         self.metric_names = [
-            "cpu_usage", "iowait", "interrupts", "ctx_switches", "net_usage", "requests_per_sec"
+            "cpu_usage", "mem_usage", "requests_per_sec", "latency"
         ]
         self.state = dict.fromkeys(self.metric_names, 0.0)
 
@@ -36,12 +36,10 @@ class ServerAgent:
         ]
 
         self.bins = {
-            "cpu_usage": np.linspace(0, 100, 5),         # 0, 25, 50, 75, 100
-            "iowait": np.linspace(0, 5, 5),              # 0, 1.25, 2.5, 3.75, 5
-            "interrupts": np.linspace(0, 20000, 5),      # 0, 5000, 10000, 15000, 20000
-            "ctx_switches": np.linspace(0, 100000, 5),   # 0, 25000, 50000, 75000, 100000
-            "net_usage": np.linspace(0, 100, 5),         # 0, 25, 50, 75, 100 (en Mo/s)
-            "requests_per_sec": np.linspace(0, 100000, 6) # 0, 20000, 40000, 60000, 80000, 100000
+            "cpu_usage": np.linspace(0, 100, 5), 
+            "mem_usage": np.linspace(70, 80, 5),  
+            "requests_per_sec": np.linspace(170000, 210000, 9), 
+            "latency": np.linspace(8, 20, 13)  
         }
         q_table_shape = tuple(len(b) - 1 for b in self.bins.values()) + (len(self.actions),)
         self.q_table = np.zeros(q_table_shape)
@@ -63,8 +61,12 @@ class ServerAgent:
             if value is None:
                 value = 0.0
             if name == "requests_per_sec":
-                norm = min(value / 100000, 1.0)  
-            else:
+                norm = min((value - 170000) / 40000, 1.0) 
+            elif name == "latency":
+                norm = min((value - 8) / 12.0, 1.0)  
+            elif name == "mem_usage":
+                norm = min((value - 70) / 10.0, 1.0) 
+            elif name == "cpu_usage":
                 norm = min(value / 100.0, 1.0)
             state.append(norm)
         return np.array(state)
@@ -103,7 +105,7 @@ class ServerAgent:
 
     def apply_action(self, action_idx):
         """
-        Apply the selected action to the system.
+        Apply the selected action to the system, with logging before and after.
         """
         action = self.actions[action_idx]
 
@@ -145,38 +147,32 @@ class ServerAgent:
             os.system("sudo sysctl -w net.core.rmem_max=212992")
         elif action == "reset_wmem_max":
             os.system("sudo sysctl -w net.core.wmem_max=212992")
-        
-        time.sleep(0.5) 
+        time.sleep(0.5)
 
-    def compute_reward(self, metrics, latency=None, p99=None, debug=False):
+    def compute_reward(self, metrics, latency=None, p99=None, debug=False, prev_rps=None):
         """
         Compute the reward based on system metrics and latency.
         """
-
         rps = metrics.get("requests_per_sec", 0)
-        iowait = metrics.get("iowait", 0)
         cpu = metrics.get("cpu_usage", 0)
-        ctx_switches = metrics.get("ctx_switches", 0)
-        interrupts = metrics.get("interrupts", 0)
+        mem = metrics.get("mem_usage", 0)
 
-        rps_reward = rps / (1 + rps / 50000)
+        reward = rps
 
+        if cpu > 200:
+            reward -= (cpu - 200) * 20
+        if mem > 200:
+            reward -= (mem - 200) * 5
         if latency is not None:
-            latency_factor = max(0, 1 - (latency / 100)) 
-            rps_reward *= latency_factor
+            reward -= latency * 500
 
-        cpu_penalty = np.exp(cpu - 80) * 10 if cpu > 80 else cpu * 0.5 
-        io_penalty = iowait * (100 if iowait > 5 else 10)
-        ctx_penalty = np.log1p(ctx_switches) * 0.001
-        int_penalty = np.log1p(interrupts) * 0.001
+        if prev_rps is not None and rps < 0.9 * prev_rps:
+            if debug:
+                print("Stability penalty: RPS dropped!")
+            reward *= 0.5
 
-        reward = (
-            rps_reward
-            - cpu_penalty 
-            - io_penalty
-            - ctx_penalty 
-            - int_penalty
-        )
+        if debug:
+            print(f"Reward: {reward:.2f} | RPS: {rps:.2f} | CPU nginx: {cpu:.2f}% | MEM nginx: {mem:.2f} Mo | Latency: {latency}")
 
         return max(reward, 0)
 

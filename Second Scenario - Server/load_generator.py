@@ -19,7 +19,7 @@ def convert_to_ms(value_str):
         return value * 1000
     return None
 
-def run_wrk(url="http://localhost/server.html", duration=10, threads=2, connections=10):
+def run_wrk(url="http://localhost/server.html", duration=10, threads=32, connections=4000):
     """
     Launches the wrk HTTP benchmarking tool and returns the requests per second and raw output.
     """

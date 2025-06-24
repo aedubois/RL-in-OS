@@ -71,6 +71,7 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
         requests_per_sec, latency, p99, _ = run_wrk(duration=2)
         state = agent.get_state(collect_metrics(requests_per_sec))
         total_reward = 0
+        last_rps = requests_per_sec
         for step in range(nb_steps_per_episode):
             metrics = collect_metrics(requests_per_sec)
             metrics["latency"] = latency  
@@ -80,7 +81,8 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
             requests_per_sec, latency, p99, _ = run_wrk(duration=2)
             next_state = agent.get_state(collect_metrics(requests_per_sec))
             metrics = collect_metrics(requests_per_sec)
-            reward = agent.compute_reward(metrics, latency=latency, p99=p99)
+            reward = agent.compute_reward(metrics, latency=latency, p99=p99, prev_rps=last_rps)
+            last_rps = requests_per_sec
             if agent.actions[action_idx] != "no_op":
                 penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
                 reward *= penalty_factor
@@ -89,7 +91,7 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
             total_reward += reward
             state = next_state
             time.sleep(sleep_interval)
-        rewards.append(total_reward)
+        rewards.append(total_reward/nb_steps_per_episode)
         print(f"Average reward for episode {episode+1}: {total_reward/nb_steps_per_episode}")
     os.makedirs("Second Scenario - Server/rewards", exist_ok=True)
     np.save("Second Scenario - Server/rewards/rewards_heuristic_server.npy", np.array(rewards))
