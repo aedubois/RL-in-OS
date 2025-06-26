@@ -14,20 +14,20 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
         reset_sys_params()
         previous_actions = []
         requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-        state = agent.get_state(collect_metrics(requests_per_sec))
+        state = agent.get_state(collect_metrics(requests_per_sec, latency))
         total_reward = 0
         last_rps = requests_per_sec
         for step in range(nb_steps_per_episode):
             action_idx = np.random.randint(len(agent.actions))
             agent.apply_action(action_idx)
             requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-            next_state = agent.get_state(collect_metrics(requests_per_sec))
-            metrics = collect_metrics(requests_per_sec)
+            next_state = agent.get_state(collect_metrics(requests_per_sec, latency))
+            metrics = collect_metrics(requests_per_sec, latency)
             reward = agent.compute_reward(metrics, latency=latency, p99=p99, prev_rps=last_rps)
             last_rps = requests_per_sec
-            if agent.actions[action_idx] != "no_op":
-                penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-                reward *= penalty_factor
+            #if agent.actions[action_idx] != "no_op":
+            #    penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+            #    reward *= penalty_factor
             print("reward:", reward)
             previous_actions.append(action_idx)
             total_reward += reward

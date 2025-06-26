@@ -147,7 +147,7 @@ class ServerAgent:
             os.system("sudo sysctl -w net.core.rmem_max=212992")
         elif action == "reset_wmem_max":
             os.system("sudo sysctl -w net.core.wmem_max=212992")
-        time.sleep(0.5)
+        time.sleep(1)
 
     def compute_reward(self, metrics, latency=None, p99=None, debug=False, prev_rps=None):
         """

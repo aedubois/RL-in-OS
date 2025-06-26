@@ -17,44 +17,44 @@ def heuristic_policy(metrics, agent):
 
     # dirty_ratio
     dirty_ratio = get_sysctl_value("vm.dirty_ratio")
-    if metrics["iowait"] > 1 and dirty_ratio != 10:
+    if metrics["latency"] > 18 and dirty_ratio != 10:
         return agent.actions.index("set_dirty_ratio_10")
-    if metrics["iowait"] < 0.2 and dirty_ratio != 40:
+    if metrics["latency"] < 12 and dirty_ratio != 40:
         return agent.actions.index("set_dirty_ratio_40")
 
     # wmem_max
     wmem_max = get_sysctl_value("net.core.wmem_max")
-    if metrics.get("latency", 0) > 1 and metrics["requests_per_sec"] < 100000 and wmem_max != 16777216:
+    if metrics["latency"] > 17 and wmem_max != 16777216:
         return agent.actions.index("set_wmem_max_16M")
-    if metrics.get("latency", 0) > 0.5 and wmem_max != 8388608:
+    if metrics["latency"] < 12 and wmem_max != 8388608:
         return agent.actions.index("set_wmem_max_8M")
 
     # rmem_max
     rmem_max = get_sysctl_value("net.core.rmem_max")
-    if metrics["cpu_usage"] > 30 and rmem_max != 16777216:
+    if metrics["cpu_usage"] > 50 and rmem_max != 16777216:
         return agent.actions.index("set_rmem_max_16M")
     if metrics["cpu_usage"] < 10 and rmem_max != 1048576:
         return agent.actions.index("set_rmem_max_1M")
 
-    # ctx_switches / somaxconn
+    # somaxconn
     somaxconn = get_sysctl_value("net.core.somaxconn")
-    if metrics.get("ctx_switches", 0) > 20000 and somaxconn != 1024:
+    if metrics["requests_per_sec"] > 190000 and somaxconn != 1024:
         return agent.actions.index("set_somaxconn_1024")
-    if metrics.get("ctx_switches", 0) < 5000 and somaxconn != 128:
+    if metrics["requests_per_sec"] < 170000 and somaxconn != 128:
         return agent.actions.index("set_somaxconn_128")
 
     # tcp_tw_reuse
     tcp_tw_reuse = get_sysctl_value("net.ipv4.tcp_tw_reuse")
-    if metrics.get("latency", 0) > 2 and tcp_tw_reuse != 1:
+    if metrics["latency"] > 20 and tcp_tw_reuse != 1:
         return agent.actions.index("set_tcp_tw_reuse_1")
-    if metrics.get("latency", 0) < 0.5 and tcp_tw_reuse != 0:
+    if metrics["latency"] < 10 and tcp_tw_reuse != 0:
         return agent.actions.index("set_tcp_tw_reuse_0")
 
     # tcp_fin_timeout
     tcp_fin_timeout = get_sysctl_value("net.ipv4.tcp_fin_timeout")
-    if metrics.get("interrupts", 0) > 10000 and tcp_fin_timeout != 10:
+    if metrics["latency"] > 20 and tcp_fin_timeout != 10:
         return agent.actions.index("set_tcp_fin_timeout_10")
-    if metrics.get("interrupts", 0) < 2000 and tcp_fin_timeout != 60:
+    if metrics["latency"] < 12 and tcp_fin_timeout != 30:
         return agent.actions.index("set_tcp_fin_timeout_30")
 
     # by default, do nothing
@@ -69,23 +69,23 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
         reset_sys_params()
         previous_actions = []
         requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-        state = agent.get_state(collect_metrics(requests_per_sec))
+        state = agent.get_state(collect_metrics(requests_per_sec, latency))
         total_reward = 0
         last_rps = requests_per_sec
         for step in range(nb_steps_per_episode):
-            metrics = collect_metrics(requests_per_sec)
+            metrics = collect_metrics(requests_per_sec, latency)
             metrics["latency"] = latency  
             action_idx = heuristic_policy(metrics, agent)
             print("Applying action:", agent.actions[action_idx])
             agent.apply_action(action_idx)
             requests_per_sec, latency, p99, _ = run_wrk(duration=2)
-            next_state = agent.get_state(collect_metrics(requests_per_sec))
-            metrics = collect_metrics(requests_per_sec)
+            next_state = agent.get_state(collect_metrics(requests_per_sec, latency))
+            metrics = collect_metrics(requests_per_sec, latency)
             reward = agent.compute_reward(metrics, latency=latency, p99=p99, prev_rps=last_rps)
             last_rps = requests_per_sec
-            if agent.actions[action_idx] != "no_op":
-                penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-                reward *= penalty_factor
+            #if agent.actions[action_idx] != "no_op":
+            #    penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+            #    reward *= penalty_factor
             print("reward:", reward)
             previous_actions.append(action_idx)
             total_reward += reward

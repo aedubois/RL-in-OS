@@ -45,16 +45,25 @@ def collect_metrics(requests_per_sec, latency):
 def reset_sys_params():
     """Reset system parameters to default values between episodes."""
     os.system("sudo sysctl -w vm.dirty_ratio=20")
+    time.sleep(0.1)
     os.system("sudo sysctl -w net.core.rmem_max=212992")
+    time.sleep(0.1)
     os.system("sudo sysctl -w net.core.wmem_max=212992")
+    time.sleep(0.1)
     os.system("sudo sysctl -w net.ipv4.tcp_tw_reuse=0")
+    time.sleep(0.1)
     os.system("sudo sysctl -w net.ipv4.tcp_fin_timeout=60") 
+    time.sleep(0.1)
     os.system("sudo sysctl -w net.core.somaxconn=128")
+    time.sleep(0.1)
     os.system("sudo systemctl restart nginx")
+    time.sleep(0.1)
     os.system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'")
+    time.sleep(0.1)
     os.system("pkill wrk")
+    time.sleep(0.1)
     os.system("sudo truncate -s 0 /var/log/nginx/access.log")
-    time.sleep(2)  
+    time.sleep(1)  
 
 def get_current_params():
     """Get current system parameters for logging and validation."""
@@ -93,9 +102,9 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
         print("metrics:", metrics)
         reward = agent.compute_reward(metrics, latency=latency, p99=p99, prev_rps=last_rps)
         last_rps = requests_per_sec
-        if agent.actions[action_idx] != "no_op":
-            penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
-            reward *= penalty_factor
+        #if agent.actions[action_idx] != "no_op":
+        #    penalty_factor = agent.penalize_consecutive_actions(action_idx, previous_actions)
+        #    reward *= penalty_factor
         print("reward:", reward)
         previous_actions.append(action_idx)
         agent.learn(state, action_idx, reward, next_state)
@@ -146,7 +155,7 @@ def plot_rewards(rewards, plots_dir):
     plt.savefig(plot_path)
     print(f"Plot saved as {plot_path}")
 
-def train_agent(num_episodes=100, nb_steps_per_episode=20, sleep_interval=0.1, return_rewards=False, exploration_rate=1.0):
+def train_agent(num_episodes=30, nb_steps_per_episode=10, sleep_interval=0.1, return_rewards=False, exploration_rate=0.1):
     """Train a reinforcement learning agent for the server scenario."""
     agent = ServerAgent(exploration_rate=exploration_rate)
     qtable_path = "Second Scenario - Server/q_table_server.npy"
