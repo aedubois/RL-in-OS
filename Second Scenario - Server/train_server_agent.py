@@ -96,7 +96,7 @@ def run_episode(agent, nb_steps_per_episode, sleep_interval, previous_actions):
         action_idx = agent.select_action(state)
         print(f"Applying action: {agent.actions[action_idx]}")
         agent.apply_action(action_idx)
-        requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+        requests_per_sec, latency, p99, _ = run_wrk()
         next_state = agent.get_state(collect_metrics(requests_per_sec, latency))
         metrics = collect_metrics(requests_per_sec, latency)
         print("metrics:", metrics)

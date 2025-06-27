@@ -78,7 +78,7 @@ def main(num_episodes=30, nb_steps_per_episode=10, sleep_interval=1, return_rewa
             action_idx = heuristic_policy(metrics, agent)
             print("Applying action:", agent.actions[action_idx])
             agent.apply_action(action_idx)
-            requests_per_sec, latency, p99, _ = run_wrk(duration=2)
+            requests_per_sec, latency, p99, _ = run_wrk()
             next_state = agent.get_state(collect_metrics(requests_per_sec, latency))
             metrics = collect_metrics(requests_per_sec, latency)
             reward = agent.compute_reward(metrics, latency=latency, p99=p99, prev_rps=last_rps)
