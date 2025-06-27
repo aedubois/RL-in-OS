@@ -3,9 +3,67 @@ import os
 import threading
 import time
 import numpy as np
+import subprocess
 
-if os.geteuid() != 0:
-    print("Warning: Some actions require root privileges. You may be prompted for your password.")
+NEGATIVE_ACTIONS_INFO = {
+    "simulate_cpu_stress":        1,
+    "simulate_memory_stress":     2,
+    "simulate_disk_fill":         3,
+    "simulate_disk_latency":      2,
+    "stress_tmpfs":               2,
+    "play_streaming_video":       4,
+    "simulate_network_stress":    2,
+    "simulate_swap_stress":       3,
+    "simulate_high_load":         1,
+    "simulate_temp_increase":     2
+}
+
+NEGATIVE_ACTIONS = list(NEGATIVE_ACTIONS_INFO.keys())
+
+def get_negative_action_delay(action):
+    return NEGATIVE_ACTIONS_INFO.get(action, 2)
+
+def apply_negative_action(action):
+    if action == "simulate_cpu_stress":
+        print("Simulating CPU stress...")
+        return subprocess.Popen("stress-ng --cpu 2 --timeout 8", shell=True)
+    elif action == "simulate_memory_stress":
+        print("Simulating memory stress...")
+        return subprocess.Popen("stress-ng --vm 2 --vm-bytes 1G --timeout 8", shell=True)
+    elif action == "simulate_disk_fill":
+        print("Simulating disk fill...")
+        return subprocess.Popen("dd if=/dev/zero of=/tmp/fillfile bs=1M count=2048", shell=True)
+    elif action == "simulate_disk_latency":
+        print("Simulating disk latency...")
+        return subprocess.Popen("stress-ng --hdd 2 --hdd-bytes 1G --timeout 8", shell=True)
+    elif action == "stress_tmpfs":
+        print("Simulating tmpfs stress...")
+        return subprocess.Popen("dd if=/dev/zero of=/dev/shm/tmpfs_stress bs=1M count=1024", shell=True)
+    elif action == "play_streaming_video":
+        print("Playing streaming video...")
+        return subprocess.Popen(
+            "vlc --intf dummy --run-time=8 --play-and-exit https://commondatastorage.googleapis.com/gtv-videos-bucket/sample/BigBuckBunny.mp4 vlc://quit",
+            shell=True,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL
+        )
+    elif action == "simulate_network_stress":
+        print("Simulating network stress...")
+        server_proc = subprocess.Popen("iperf3 -s", shell=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        time.sleep(1)
+        client_proc = subprocess.Popen("iperf3 -c 127.0.0.1 -t 8", shell=True)
+        return (server_proc, client_proc)
+    elif action == "simulate_swap_stress":
+        print("Simulating swap stress...")
+        return subprocess.Popen("sudo stress-ng --swap 2 --timeout 8", shell=True)
+    elif action == "simulate_high_load":
+        print("Simulating high load...")
+        return subprocess.Popen("timeout 8s yes > /dev/null", shell=True)
+    elif action == "simulate_temp_increase":
+        print("Simulating temperature increase...")
+        return subprocess.Popen("stress-ng --cpu 4 --timeout 8", shell=True)
+    else:
+        return None
 
 def get_main_disk():
     """
@@ -15,13 +73,49 @@ def get_main_disk():
     for p in partitions:
         if p.mountpoint == '/':
             return p.device
-    return '/dev/sda' # Default to /dev/sda if not found
+    return '/dev/sda'
 
+def get_param_actions():
+    disk = get_main_disk()
+    return [
+        # dirty_ratio
+        ("set_dirty_ratio_10", "sudo sysctl -w vm.dirty_ratio=10"),
+        ("set_dirty_ratio_20", "sudo sysctl -w vm.dirty_ratio=20"),
+        ("set_dirty_ratio_40", "sudo sysctl -w vm.dirty_ratio=40"),
+        # swappiness
+        ("set_swappiness_10", "sudo sysctl -w vm.swappiness=10"),
+        ("set_swappiness_60", "sudo sysctl -w vm.swappiness=60"),
+        ("set_swappiness_100", "sudo sysctl -w vm.swappiness=100"),
+        # read_ahead 
+        ("set_read_ahead_128", f"sudo blockdev --setra 128 {disk}"),
+        ("set_read_ahead_512", f"sudo blockdev --setra 512 {disk}"),
+        ("set_read_ahead_1024", f"sudo blockdev --setra 1024 {disk}"),
+        # cpu governor
+        ("set_cpu_powersave", "sudo sh -c 'echo powersave > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'"),
+        ("set_cpu_performance", "sudo sh -c 'echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'"),
+        # zswap
+        ("enable_zswap", "sudo sh -c 'echo 1 > /sys/module/zswap/parameters/enabled'"),
+        ("disable_zswap", "sudo sh -c 'echo 0 > /sys/module/zswap/parameters/enabled'"),
+    ]
+
+def get_reaction_actions():
+    return [
+        "lower_process_priority",
+        "reduce_io_threads",
+        "drop_caches",
+        "kill_stress_processes",
+        "clean_tmp",
+    ]
+
+def get_stress_one_hot(stress_name):
+    one_hot = np.zeros(len(NEGATIVE_ACTIONS))
+    if stress_name in NEGATIVE_ACTIONS:
+        idx = NEGATIVE_ACTIONS.index(stress_name)
+        one_hot[idx] = 1
+    return one_hot
 class EventAgent:
     def __init__(self):
-        """
-        Initialize agent thresholds, state, actions, bins, and Q-table.
-        """
+        """ Initialize the EventAgent with system metrics and thresholds."""
         self.thresholds = {
             "high_cpu": 80,
             "high_memory": 80,
@@ -37,29 +131,19 @@ class EventAgent:
             "temperature": 0,
             "io_wait": 0,
         }
-        self.actions = [
-            "reduce_swappiness",
-            "increase_dirty_ratio",
-            "set_cpu_powersave",
-            "set_cpu_performance",
-            "lower_process_priority",
-            "reduce_io_threads",
-            "drop_caches",
-            "enable_zswap",
-            "increase_read_ahead",
-            "kill_stress_processes",
-            "clean_tmp",
-        ]
+        self.last_stress = None
+        self.actions = [a[0] for a in get_param_actions()] + get_reaction_actions()
+        self.action_cmds = {a[0]: a[1] for a in get_param_actions()}
         self.bins = {
-            "cpu_usage": np.linspace(0, 1, 4),   
-            "memory_usage": np.linspace(0, 1, 4), 
-            "swap_usage": np.linspace(0, 1, 3),  
-            "load_average": np.linspace(0, 1, 4),   
-            "disk_usage": np.linspace(0, 1, 4),    
-            "temperature": np.linspace(0, 1, 4),   
-            "io_wait": np.linspace(0, 1, 3),       
+            "cpu_usage": np.linspace(0, 1, 4),
+            "memory_usage": np.linspace(0, 1, 4),
+            "swap_usage": np.linspace(0, 1, 3),
+            "load_average": np.linspace(0, 1, 4),
+            "disk_usage": np.linspace(0, 1, 4),
+            "temperature": np.linspace(0, 1, 4),
+            "io_wait": np.linspace(0, 1, 3),
         }
-        q_table_shape = tuple(len(bins) - 1 for bins in self.bins.values()) + (len(self.actions),)
+        q_table_shape = tuple(len(bins) - 1 for bins in self.bins.values()) + (len(NEGATIVE_ACTIONS), len(self.actions))
         if os.path.exists("First Scenario - Desktop/q_table.npy"):
             self.q_table = np.load("First Scenario - Desktop/q_table.npy")
             print("Q-Table loaded from  First Scenario - Desktop/q_table.npy")
@@ -147,9 +231,9 @@ class EventAgent:
 
     def get_normalized_state(self):
         """
-        Normalize state metrics to [0, 1].
+        Normalize state metrics to [0, 1] and concat one-hot stress.
         """
-        return np.array([
+        base = np.array([
             min(1, self.state["cpu_usage"] / 100),
             min(1, self.state["memory_usage"] / 100),
             min(1, self.state["swap_usage"] / 50),
@@ -158,10 +242,12 @@ class EventAgent:
             min(1, self.state["temperature"] / 100),
             min(1, self.state["io_wait"] / 20),
         ])
+        stress_one_hot = get_stress_one_hot(self.last_stress) if self.last_stress else np.zeros(len(NEGATIVE_ACTIONS))
+        return np.concatenate([base, stress_one_hot])
 
     def discretize_state(self, state):
         """
-        Discretize the state into bins for Q-learning.
+        Discretize the state into bins for Q-learning, including stress.
         """
         metrics_order = [
             "cpu_usage",
@@ -179,7 +265,24 @@ class EventAgent:
             bin_idx = np.digitize(value, bin_edges) - 1
             bin_idx = max(0, min(bin_idx, len(bin_edges) - 2))
             discretized_state.append(bin_idx)
+        if self.last_stress and self.last_stress in NEGATIVE_ACTIONS:
+            stress_idx = NEGATIVE_ACTIONS.index(self.last_stress)
+        else:
+            stress_idx = 0
+        discretized_state.append(stress_idx)
         return tuple(discretized_state)
+    
+    def reset_all_params(self):
+        """
+        Reset all system parameters to default values.
+        """
+        disk = get_main_disk()
+        subprocess.run("sudo sysctl -w vm.dirty_ratio=20", shell=True)
+        subprocess.run("sudo sysctl -w vm.swappiness=60", shell=True)
+        subprocess.run(f"sudo blockdev --setra 128 {disk}", shell=True)
+        subprocess.run("sudo sh -c 'echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'", shell=True)
+        subprocess.run("sudo sh -c 'echo 0 > /sys/module/zswap/parameters/enabled'", shell=True)
+        time.sleep(1)
 
     def select_action(self, state):
         """
@@ -198,26 +301,9 @@ class EventAgent:
         """
         action = self.actions[action_idx]
         reaction = ""
-        if action == "reduce_swappiness":
-            os.system("sudo sysctl -w vm.swappiness=10")
-            reaction = "Swappiness reduced to 10."
-        elif action == "increase_dirty_ratio":
-            os.system("sudo sysctl -w vm.dirty_ratio=40")
-            reaction = "Dirty ratio increased to 40."
-        elif action == "set_cpu_powersave":
-            path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
-            if os.path.exists(path):
-                os.system("sudo sh -c 'echo powersave > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
-                reaction = "CPU set to powersave mode."
-            else:
-                reaction = "CPU governor path not found."
-        elif action == "set_cpu_performance":
-            path = "/sys/devices/system/cpu/cpu0/cpufreq/scaling_governor"
-            if os.path.exists(path):
-                os.system("sudo sh -c 'echo performance > /sys/devices/system/cpu/cpu0/cpufreq/scaling_governor'")
-                reaction = "CPU set to performance mode."
-            else:
-                reaction = "CPU governor path not found."
+        if action in self.action_cmds:
+            os.system(self.action_cmds[action])
+            reaction = f"{action.replace('_', ' ').capitalize()} applied."
         elif action == "lower_process_priority":
             os.system("sudo renice +10 -p $(pgrep stress)")
             reaction = "Process priority lowered."
@@ -227,13 +313,6 @@ class EventAgent:
         elif action == "drop_caches":
             os.system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'")
             reaction = "Caches dropped."
-        elif action == "enable_zswap":
-            os.system("sudo sh -c 'echo 1 > /sys/module/zswap/parameters/enabled'")
-            reaction = "Zswap enabled."
-        elif action == "increase_read_ahead":
-            disk = get_main_disk()
-            os.system(f"sudo blockdev --setra 512 {disk}")
-            reaction = f"Read-ahead increased to 512."
         elif action == "kill_stress_processes":
             os.system("sudo pkill -f stress-ng")
             os.system("sudo pkill -f yes")
@@ -254,7 +333,7 @@ class EventAgent:
         Compute reward based on improvements between previous and current state.
         """
         weights = np.array([1.0, 0.6, 0.8, 0.4, 0.3, 0.9, 0.5])
-        delta = state - new_state
+        delta = state[:7] - new_state[:7]
         affected = np.abs(delta) > 0.01
         reward = np.sum(delta[affected] * weights[affected]) * 10
         if not np.any(affected):
