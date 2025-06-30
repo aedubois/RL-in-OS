@@ -1,7 +1,7 @@
 import numpy as np
 from agent import get_param_actions, get_reaction_actions
 
-QTABLE_PATH = "First Scenario - Desktop/q_table.npy"
+QTABLE_PATH = "First Scenario - Desktop/lightq_table.npy"
 
 def main():
     q_table = np.load(QTABLE_PATH)
