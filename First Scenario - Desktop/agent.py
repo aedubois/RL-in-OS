@@ -15,7 +15,8 @@ NEGATIVE_ACTIONS_INFO = {
     "simulate_network_stress":    2,
     "simulate_swap_stress":       3,
     "simulate_high_load":         1,
-    "simulate_temp_increase":     2
+    "simulate_temp_increase":     2,
+    "no_op":                      0,
 }
 
 NEGATIVE_ACTIONS = list(NEGATIVE_ACTIONS_INFO.keys())
@@ -24,6 +25,9 @@ def get_negative_action_delay(action):
     return NEGATIVE_ACTIONS_INFO.get(action, 2)
 
 def apply_negative_action(action):
+    if action == "no_op":
+        print("No operation performed.")
+        return None
     if action == "simulate_cpu_stress":
         print("Simulating CPU stress...")
         return subprocess.Popen("stress-ng --cpu 2 --timeout 8", shell=True)
@@ -105,6 +109,7 @@ def get_reaction_actions():
         "drop_caches",
         "kill_stress_processes",
         "clean_tmp",
+        "no_op", 
     ]
 
 def get_stress_one_hot(stress_name):
@@ -301,7 +306,9 @@ class EventAgent:
         """
         action = self.actions[action_idx]
         reaction = ""
-        if action in self.action_cmds:
+        if action == "no_op":
+            reaction = "No operation performed."
+        elif action in self.action_cmds:
             os.system(self.action_cmds[action])
             reaction = f"{action.replace('_', ' ').capitalize()} applied."
         elif action == "lower_process_priority":

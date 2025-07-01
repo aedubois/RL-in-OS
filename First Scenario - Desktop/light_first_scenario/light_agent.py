@@ -10,6 +10,7 @@ NEGATIVE_ACTIONS_INFO = {
     "simulate_disk_fill":         3,
     "simulate_disk_latency":      2,
     "simulate_network_stress":    2,
+    "no_op":                      0,
 }
 
 NEGATIVE_ACTIONS = list(NEGATIVE_ACTIONS_INFO.keys())
@@ -58,6 +59,7 @@ def get_reaction_actions():
     return [
         "drop_caches",
         "kill_stress_processes",
+        "no_op",
     ]
 
 def get_stress_one_hot(stress_name):
@@ -158,7 +160,9 @@ class LightEventAgent:
 
     def apply_action(self, action_idx):
         action = self.actions[action_idx]
-        if action in self.action_cmds:
+        if action == "no_op":
+            print("No operation performed.")
+        elif action in self.action_cmds:
             os.system(self.action_cmds[action])
         elif action == "drop_caches":
             os.system("sudo sh -c 'echo 3 > /proc/sys/vm/drop_caches'")
