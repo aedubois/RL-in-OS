@@ -88,7 +88,7 @@ class LightEventAgent:
             "disk_usage": np.linspace(0, 1, 3),
             "temperature": np.linspace(0, 1, 3),
         }
-        q_table_shape = tuple(len(bins) - 1 for bins in self.bins.values()) + (len(NEGATIVE_ACTIONS), len(self.actions))
+        q_table_shape = tuple(len(self.bins[metric]) - 1 for metric in self.bins) + (len(NEGATIVE_ACTIONS), len(self.actions))
         if os.path.exists("First Scenario - Desktop/light_first_scenario/q_table.npy"):
             self.q_table = np.load("First Scenario - Desktop/light_first_scenario/q_table.npy")
             print("Q-Table loaded from First Scenario - Desktop/light_first_scenario/q_table.npy")

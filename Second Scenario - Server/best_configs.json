@@ -1,17 +1,17 @@
 [
   {
     "params": {
-      "dirty_ratio": "20",
+      "dirty_ratio": "30",
       "rmem_max": "212992",
       "wmem_max": "212992",
       "tcp_tw_reuse": "0",
       "tcp_fin_timeout": "60",
       "somaxconn": "128"
     },
-    "reward": 1918112.39,
-    "rps": 192664.88,
-    "latency": 15.15,
-    "timestamp": "2025-06-26T13:26:06.679244"
+    "reward": 1875826.4,
+    "rps": 217052.65,
+    "latency": 11.84,
+    "timestamp": "2025-07-28T19:57:25.264665"
   },
   {
     "params": {
@@ -19,54 +19,40 @@
       "rmem_max": "212992",
       "wmem_max": "212992",
       "tcp_tw_reuse": "0",
-      "tcp_fin_timeout": "60",
+      "tcp_fin_timeout": "30",
       "somaxconn": "128"
     },
-    "reward": 1909528.2299999997,
-    "rps": 184913.45,
-    "latency": 20.31,
-    "timestamp": "2025-06-26T13:09:26.963999"
-  },
-  {
-    "params": {
-      "dirty_ratio": "10",
-      "rmem_max": "212992",
-      "wmem_max": "212992",
-      "tcp_tw_reuse": "0",
-      "tcp_fin_timeout": "60",
-      "somaxconn": "128"
-    },
-    "reward": 1903541.9,
-    "rps": 191609.88,
-    "latency": 13.28,
-    "timestamp": "2025-06-26T13:08:12.201570"
-  },
-  {
-    "params": {
-      "dirty_ratio": "20",
-      "rmem_max": "212992",
-      "wmem_max": "212992",
-      "tcp_tw_reuse": "0",
-      "tcp_fin_timeout": "60",
-      "somaxconn": "128"
-    },
-    "reward": 1882133.37,
-    "rps": 187089.67,
-    "latency": 17.79,
-    "timestamp": "2025-06-26T13:06:58.353666"
-  },
-  {
-    "params": {
-      "dirty_ratio": "20",
-      "rmem_max": "212992",
-      "wmem_max": "212992",
-      "tcp_tw_reuse": "0",
-      "tcp_fin_timeout": "60",
-      "somaxconn": "128"
-    },
-    "reward": 1755838.96,
-    "rps": 190400.59,
+    "reward": 1798983.435,
+    "rps": 214812.83,
     "latency": 12.88,
-    "timestamp": "2025-06-26T13:05:44.522731"
+    "timestamp": "2025-07-28T19:44:32.325823"
+  },
+  {
+    "params": {
+      "dirty_ratio": "20",
+      "rmem_max": "212992",
+      "wmem_max": "8388608",
+      "tcp_tw_reuse": "0",
+      "tcp_fin_timeout": "60",
+      "somaxconn": "128"
+    },
+    "reward": 1784024.59,
+    "rps": 214714.43,
+    "latency": 12.88,
+    "timestamp": "2025-07-28T19:39:25.315739"
+  },
+  {
+    "params": {
+      "dirty_ratio": "20",
+      "rmem_max": "212992",
+      "wmem_max": "16777216",
+      "tcp_tw_reuse": "0",
+      "tcp_fin_timeout": "60",
+      "somaxconn": "1024"
+    },
+    "reward": 1783636.1300000001,
+    "rps": 217065.88,
+    "latency": 14.93,
+    "timestamp": "2025-07-28T19:34:18.075789"
   }
 ]

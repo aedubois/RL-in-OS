@@ -3,7 +3,7 @@ import random
 from light_agent import LightEventAgent, NEGATIVE_ACTIONS, get_negative_action_delay, apply_negative_action
 import matplotlib.pyplot as plt
 
-def train_agent(num_episodes=200, nb_steps_per_episode=8, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, exploration_decay=0.995):
+def train_agent(num_episodes=1000, nb_steps_per_episode=10, learning_rate=0.1, discount_factor=0.9, exploration_rate=1.0, exploration_decay=0.995):
     """Main training loop for the light RL agent in the first scenario."""
     agent = LightEventAgent()
     agent.learning_rate = learning_rate
